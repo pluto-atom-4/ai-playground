@@ -1,0 +1,26 @@
+{
+  "properties": {
+    "enabled": true,
+    "scopes": [
+      "/subscriptions/<sub-id>/resourceGroups/<rg-name>/providers/microsoft.insights/components/<app-insights-name>"
+    ],
+    "evaluationFrequency": "PT5M",
+    "windowSize": "PT5M",
+    "criteria": {
+      "allOf": [
+        {
+          "query": "requests | summarize avg(duration) by bin(timestamp, 5m)",
+          "timeAggregation": "Average",
+          "operator": "GreaterThan",
+          "threshold": 2000,
+          "metricName": "RequestDuration"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "actionGroupId": "/subscriptions/<sub-id>/resourceGroups/<rg-name>/providers/microsoft.insights/actionGroups/<action-group>"
+      }
+    ]
+  }
+}

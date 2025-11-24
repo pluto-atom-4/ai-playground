@@ -1,0 +1,44 @@
+# # Azure ML monitoring configuration for business KPIs
+# ## False Positive Rate (FPR):
+# - Measures how often legitimate transactions are incorrectly blocked.
+# - High FPR → poor customer experience, lost revenue.
+#
+# ## Threshold set at 5% (adjustable).
+# - Fraud Capture Rate (FCR):
+# - Measures how often fraudulent transactions are correctly flagged.
+# - Low FCR → missed fraud, financial loss.
+# - Threshold set at 90% (adjustable).
+#
+# ## Queries:
+# - Use transaction logs with decision (model output) and label (ground truth).
+# - SQL‑like queries can be implemented in Azure Monitor Workbooks or Azure ML Data Monitors.
+
+apiVersion: monitoring.azureml/v1
+kind: CustomMetricMonitor
+metadata:
+  name: fraud-business-kpi-monitor
+spec:
+  target:
+    model: azureml:fraud_model_output@latest
+    dataset: azureml:transactions_dataset@latest
+  schedule:
+    frequency: Daily
+  metrics:
+    - name: FalsePositiveRate
+      description: Percentage of legitimate transactions incorrectly flagged as fraud
+      query: >
+        SELECT
+          COUNT(*) FILTER (WHERE decision='fraud' AND label='legit') * 1.0 /
+          COUNT(*) FILTER (WHERE label='legit') AS false_positive_rate
+        FROM transactions
+      threshold: 0.05   # Alert if FPR > 5%
+    - name: FraudCaptureRate
+      description: Percentage of fraudulent transactions correctly identified
+      query: >
+        SELECT
+          COUNT(*) FILTER (WHERE decision='fraud' AND label='fraud') * 1.0 /
+          COUNT(*) FILTER (WHERE label='fraud') AS fraud_capture_rate
+        FROM transactions
+      threshold: 0.90   # Alert if FCR < 90%
+  alert:
+    actionGroup: fraud-alert-group

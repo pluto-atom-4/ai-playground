@@ -1,0 +1,46 @@
+# Minimal AKS deployment manifest for the fraud detection Decision service
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-decision-service
+  labels:
+    app: fraud-decision
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fraud-decision
+  template:
+    metadata:
+      labels:
+        app: fraud-decision
+    spec:
+      containers:
+      - name: fraud-decision-container
+        image: yourregistry.azurecr.io/fraud-decision-service:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+        env:
+        - name: MODEL_ENDPOINT
+          value: "https://fraud-model-endpoint.eastus.inference.ml.azure.com"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-decision-service
+spec:
+  selector:
+    app: fraud-decision
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer

@@ -1,0 +1,25 @@
+# Azure Monitor + ML integration for drift detection
+# Notes:
+#  - Compares current transaction features vs. baseline dataset.
+#  - Triggers alerts if PSI > 0.2 (significant drift) or KS test p-value < 0.05.
+#  - Alerts routed to the same action group as latency monitoring.
+
+apiVersion: monitoring.azureml/v1
+kind: DataDriftMonitor
+metadata:
+  name: fraud-model-drift-monitor
+spec:
+  target:
+    dataset: azureml:transactions_dataset@latest
+    model: azureml:fraud_model_output@latest
+  baseline:
+    dataset: azureml:transactions_baseline_dataset@latest
+  schedule:
+    frequency: Daily
+  metrics:
+    - name: PopulationStabilityIndex
+      threshold: 0.2
+    - name: KolmogorovSmirnovTest
+      threshold: 0.05
+  alert:
+    actionGroup: fraud-alert-group

@@ -1,0 +1,85 @@
+# Azure ML pipeline for training fraud detection models with automated retraining
+#🧩 How This Works
+#  Pipeline definition: Same as before (preprocess → feature engineering → train → evaluate → register).
+#
+# Schedules section:
+# - weekly-retrain: Runs every Sunday at 2 AM UTC for full retraining.
+# - daily-hotfix-retrain: Runs daily at 3 AM UTC for incremental updates.
+# DevOps integration:
+# - You can link this YAML into Azure DevOps pipelines or GitHub Actions to trigger retraining on code/data changes.
+# - Example: push to main branch → CI/CD triggers pipeline run → retraining job scheduled.
+
+
+#🚀 Next Steps
+# - Add monitoring triggers (e.g., drift detection) to launch retraining outside of schedule.
+# - Integrate with Azure DevOps release pipelines for automatic deployment of new models after successful evaluation.
+# - Use approval gates (manual or automated) before promoting models to production.
+
+name: fraud-detection-training-pipeline
+description: Train and evaluate fraud detection models using Azure ML with scheduled retraining
+version: 1.1.0
+
+jobs:
+  preprocess_data:
+    type: command
+    component: azureml:preprocess_component@latest
+    inputs:
+      raw_data: azureml:transactions_dataset@latest
+    outputs:
+      processed_data: azureml:processed_data_output
+    compute: azureml:cpu-cluster
+
+  feature_engineering:
+    type: command
+    component: azureml:feature_engineering_component@latest
+    inputs:
+      processed_data: preprocess_data.outputs.processed_data
+    outputs:
+      features: azureml:features_output
+    compute: azureml:cpu-cluster
+
+  train_model:
+    type: command
+    component: azureml:train_fraud_model@latest
+    inputs:
+      features: feature_engineering.outputs.features
+    outputs:
+      model_output: azureml:fraud_model_output
+    compute: azureml:gpu-cluster
+
+  evaluate_model:
+    type: command
+    component: azureml:evaluate_model_component@latest
+    inputs:
+      model: train_model.outputs.model_output
+      test_data: azureml:test_dataset@latest
+    outputs:
+      evaluation_report: azureml:evaluation_output
+    compute: azureml:cpu-cluster
+
+  register_model:
+    type: command
+    component: azureml:register_model_component@latest
+    inputs:
+      model: train_model.outputs.model_output
+      evaluation: evaluate_model.outputs.evaluation_report
+    compute: azureml:cpu-cluster
+
+settings:
+  default_compute: azureml:cpu-cluster
+  continue_on_step_failure: false
+
+# 🔄 Automated retraining schedule
+schedules:
+  - name: weekly-retrain
+    trigger:
+      type: cron
+      expression: "0 2 * * 0"   # Every Sunday at 2 AM UTC
+    create_job: fraud-detection-training-pipeline
+    description: Weekly retraining of fraud detection model
+  - name: daily-hotfix-retrain
+    trigger:
+      type: cron
+      expression: "0 3 * * *"   # Daily at 3 AM UTC
+    create_job: fraud-detection-training-pipeline
+    description: Daily retraining for incremental updates

@@ -1,0 +1,55 @@
+# Azure ML pipeline for training a fraud detection model
+
+name: fraud-detection-training-pipeline
+description: Train and evaluate fraud detection models using Azure ML
+version: 1.0.0
+
+jobs:
+  preprocess_data:
+    type: command
+    component: azureml:preprocess_component@latest
+    inputs:
+      raw_data: azureml:transactions_dataset@latest
+    outputs:
+      processed_data: azureml:processed_data_output
+    compute: azureml:cpu-cluster
+
+  feature_engineering:
+    type: command
+    component: azureml:feature_engineering_component@latest
+    inputs:
+      processed_data: preprocess_data.outputs.processed_data
+    outputs:
+      features: azureml:features_output
+    compute: azureml:cpu-cluster
+
+  train_model:
+    type: command
+    component: azureml:train_fraud_model@latest
+    inputs:
+      features: feature_engineering.outputs.features
+    outputs:
+      model_output: azureml:fraud_model_output
+    compute: azureml:gpu-cluster
+
+  evaluate_model:
+    type: command
+    component: azureml:evaluate_model_component@latest
+    inputs:
+      model: train_model.outputs.model_output
+      test_data: azureml:test_dataset@latest
+    outputs:
+      evaluation_report: azureml:evaluation_output
+    compute: azureml:cpu-cluster
+
+  register_model:
+    type: command
+    component: azureml:register_model_component@latest
+    inputs:
+      model: train_model.outputs.model_output
+      evaluation: evaluate_model.outputs.evaluation_report
+    compute: azureml:cpu-cluster
+
+settings:
+  default_compute: azureml:cpu-cluster
+  continue_on_step_failure: false

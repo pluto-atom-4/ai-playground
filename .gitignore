@@ -1,0 +1,62 @@
+# IDE and editor settings
+.idea/
+.vscode/
+*.swp
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+ENV/
+env/
+.venv/
+
+# Distribution and packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.orig
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Test coverage and profiling
+.coverage
+htmlcov/
+.cache/
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Pre-commit hooks and tools
+.pre-commit-config.yaml
+.pre-commit/
+
+# MyPy and other type checkers
+.mypy_cache/
+.dmypy.json
+.pyre/
+
+# Pylint and other linters
+.pylint.d/
+
+# Unit test results
+test-results/
+
+# Ignore secrets or config files (if any)
+.env
+*.env
+*.secret
+
+__temp__*.*

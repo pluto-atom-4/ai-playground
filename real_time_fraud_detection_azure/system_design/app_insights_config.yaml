@@ -1,0 +1,17 @@
+# Application Insights configuration for monitoring latency and performance
+# Notes:
+# - Attach this ConfigMap to your AKS deployment (decision_service_deployment.yaml) as environment variables.
+# - Application Insights will automatically collect request latency, throughput, and error rates.
+# = You can define custom telemetry in your service code to log ML scoring latency.latency
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-insights-config
+  labels:
+    app: fraud-decision
+data:
+  APPINSIGHTS_INSTRUMENTATIONKEY: "<your-app-insights-key>"
+  APPLICATIONINSIGHTS_CONNECTION_STRING: "<your-app-insights-connection-string>"
+  SAMPLING_PERCENTAGE: "100"
+  CLOUD_ROLE_NAME: "fraud-decision-service"

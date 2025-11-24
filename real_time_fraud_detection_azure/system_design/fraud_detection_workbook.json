@@ -1,0 +1,63 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": {
+          "title": "🛡️ Fraud Detection Monitoring Dashboard",
+          "style": "text",
+          "content": "This workbook visualizes latency, drift, and business KPIs for the real-time fraud detection system."
+        }
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "json": {
+          "version": "KqlItem/1.0",
+          "query": "requests | summarize avg(duration) by bin(timestamp, 5m)",
+          "resourceType": "microsoft.insights/components",
+          "visualization": "timechart",
+          "title": "⚡ Average Request Latency (ms)"
+        }
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "json": {
+          "version": "KqlItem/1.0",
+          "query": "customMetrics | where name == 'PopulationStabilityIndex' | summarize avg(value) by bin(timestamp, 1d)",
+          "resourceType": "microsoft.insights/components",
+          "visualization": "timechart",
+          "title": "📊 Model Drift (PSI)"
+        }
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "json": {
+          "version": "KqlItem/1.0",
+          "query": "customMetrics | where name == 'FalsePositiveRate' | summarize avg(value) by bin(timestamp, 1d)",
+          "resourceType": "microsoft.insights/components",
+          "visualization": "timechart",
+          "title": "🚫 False Positive Rate (FPR)"
+        }
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "json": {
+          "version": "KqlItem/1.0",
+          "query": "customMetrics | where name == 'FraudCaptureRate' | summarize avg(value) by bin(timestamp, 1d)",
+          "resourceType": "microsoft.insights/components",
+          "visualization": "timechart",
+          "title": "✅ Fraud Capture Rate (FCR)"
+        }
+      }
+    }
+  ]
+}
