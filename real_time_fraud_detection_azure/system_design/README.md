@@ -135,7 +135,6 @@ This guide helps analysts quickly interpret the dashboard signals and decide on 
 
 ## 🚀 Next Steps
 
-- Integrate case management workflows (Service Bus + Logic Apps) for analyst review.
 - Add **drift-triggered retraining pipelines** that automatically launch when drift alerts fire.
 - Integrate with Azure DevOps release pipelines for automatic deployment of new models after successful evaluation.
 - Use approval gates (manual or automated) before promoting models to production.
