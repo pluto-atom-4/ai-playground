@@ -1,0 +1,32 @@
+# .github/copilot.yml
+# GitHub Copilot configuration for this repository
+
+# Restrict Copilot suggestions to specific languages
+languages:
+  - typescript
+  - typescript-declaration
+  - javascript
+  - sql
+
+# Exclude specific files or folders from Copilot suggestions
+exclude:
+  - node_modules/
+  - dist/
+  - .next/
+  - prisma/migrations/
+
+packageManager: pnpm
+
+tools:
+  - git bash
+
+# Output directory for generated documentation
+outputDirectory: ./generated/docs-copilot
+
+# File types that Copilot is allowed to create and modify
+allowedFileTypes:
+  - "*.md"
+  - "*.markdown"
+
+# Enable or disable Copilot for this repository
+enabled: true
