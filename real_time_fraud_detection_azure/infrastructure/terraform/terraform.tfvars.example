@@ -1,0 +1,18 @@
+# Terraform Example Variables File
+# Copy this file to terraform.tfvars and update with your values
+
+subscription_id = "YOUR_SUBSCRIPTION_ID_HERE"
+project_name   = "fraud-detection"
+environment    = "dev"
+location       = "eastus"
+
+# Optional: Override defaults
+# container_registry_sku = "Standard"
+# log_retention_days     = 30
+
+# Optional: Add custom tags
+# tags = {
+#   CostCenter = "123456"
+#   Owner      = "DataTeam"
+# }
+
