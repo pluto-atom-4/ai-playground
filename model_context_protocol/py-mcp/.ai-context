@@ -1,0 +1,250 @@
+# .ai-context
+# This file provides context for AI assistants (including GitHub Copilot)
+
+## Project Information
+- **Name**: py-mcp (Python Model Context Protocol)
+- **Type**: Python package
+- **Python Version**: 3.8+
+- **Description**: Python implementation of Model Context Protocol
+
+## Key Directories
+- `src/` - Source code
+- `tests/` - Test files
+- `generated/docs-copilot/` - AI-generated documentation (Copilot output directory)
+- `scripts/` - Utility scripts
+- `.github/` - GitHub workflows and configurations
+
+## Development Environment
+
+### Shell Environment
+- **Required**: Git Bash (bash.exe) for all shell commands
+- **Windows**: Use Git Bash, not PowerShell or CMD
+- **Linux/Mac**: Standard bash shell
+
+### Python Setup
+- **Virtual Environment**: .venv/
+- **Package Manager**: pip
+- **Installation**: `pip install -e ".[dev]"`
+
+## Code Quality Tools
+
+### Formatting & Linting
+- **Tool**: Ruff (Python linter and formatter in Rust)
+- **Line Length**: 100 characters
+- **Format Command**: `ruff format src/ tests/`
+- **Lint Command**: `ruff check --fix src/ tests/`
+- **Config**: `[tool.ruff]` in pyproject.toml
+
+### Type Checking
+- **Tool**: Pyright (Microsoft's Python type checker)
+- **Mode**: Basic type checking
+- **Command**: `pyright`
+- **Config**: `[tool.pyright]` in pyproject.toml
+
+### Markdown Validation
+- **Tool**: Markdownlint
+- **Line Length**: 100 characters
+- **Command**: `markdownlint-cli2 "**/*.md"`
+- **Config**: `.markdownlint.json`
+
+### Pre-commit Hooks
+- **Config File**: `.pre-commit-config.yaml`
+- **Install**: `pre-commit install`
+- **Run All**: `pre-commit run --all-files`
+- **Runs on**: markdownlint, ruff, pyright, YAML/JSON validation
+
+## Testing
+- **Framework**: pytest
+- **Test Directory**: `tests/`
+- **Command**: `pytest`
+- **With Coverage**: `pytest --cov=src tests/`
+- **Config**: `[tool.pytest.ini_options]` in pyproject.toml
+
+## Configuration Files
+
+### pyproject.toml
+- Project metadata
+- Dependencies and optional dependencies
+- Tool configurations (ruff, pyright, pytest, coverage)
+- PEP 517/518 build system specification
+
+### .pre-commit-config.yaml
+- Automated pre-commit hooks
+- Includes: markdownlint, ruff, pyright, YAML/JSON/TOML validation
+
+### .copilotignore
+- GitHub Copilot instructions
+- Shell environment: Git Bash requirement
+- Output directory: generated/docs-copilot/
+
+### .markdownlint.json
+- Markdown linting rules
+- Line length: 100 characters
+- Prettier-compatible style
+
+### .editorconfig
+- Editor settings for consistency
+- Character encoding: UTF-8
+- Line endings: LF (Unix-style)
+- Indentation: 4 spaces for Python, 2 spaces for JSON/YAML
+
+### .gitignore
+- Standard Python ignores
+- Virtual environment: .venv/
+- Generated artifacts, cache files
+- IDE files: .idea/, .vscode/
+
+## AI Assistant Guidelines
+
+### GitHub Copilot
+When generating code in this project:
+
+1. **Shell Commands**
+   - Always use bash syntax (Git Bash compatible)
+   - Use forward slashes for paths
+   - Avoid Windows-specific commands
+
+2. **Generated Documentation**
+   - Save all outputs to `generated/docs-copilot/`
+   - Use Markdown format
+   - Follow 100-character line limit
+   - Follow markdownlint rules
+
+3. **Python Code**
+   - Follow ruff configuration
+   - Use type hints for Pyright
+   - Keep line length to 100 characters
+   - Follow PEP 8 standards
+
+4. **Dependencies**
+   - Add to `pyproject.toml` under appropriate section
+   - Specify versions for stability
+   - Include in either main or dev dependencies
+
+### Code Generation Best Practices
+
+1. **Format**: Always format generated code
+   ```bash
+   ruff format src/ tests/
+   ```
+
+2. **Lint**: Check for issues
+   ```bash
+   ruff check --fix src/ tests/
+   ```
+
+3. **Type Check**: Verify type hints
+   ```bash
+   pyright
+   ```
+
+4. **Documentation**: Save to correct directory
+   ```
+   generated/docs-copilot/doc_name.md
+   ```
+
+## Common Workflows
+
+### Initial Setup
+```bash
+bash scripts/setup.sh
+```
+
+### Daily Development
+```bash
+# Activate environment
+source .venv/Scripts/activate
+
+# Make changes to src/
+# Add tests to tests/
+# Run tests
+pytest
+
+# Check code quality
+ruff check --fix src/ tests/
+ruff format src/ tests/
+pyright
+```
+
+### Before Commit
+```bash
+# Run pre-commit hooks
+pre-commit run --all-files
+
+# Or use make
+make pre-commit
+```
+
+### Using Make
+```bash
+make check      # Format and lint
+make test       # Run tests
+make coverage   # Tests with coverage
+make clean      # Clean up artifacts
+make pre-commit # Run pre-commit
+```
+
+## Project Standards
+
+### Naming Conventions
+- **Python Modules**: snake_case
+- **Python Classes**: PascalCase
+- **Python Functions**: snake_case
+- **Constants**: UPPER_SNAKE_CASE
+
+### Documentation
+- **Docstrings**: Google-style or NumPy-style
+- **Type Hints**: PEP 484 compliant
+- **Comments**: Clear and concise
+- **Line Length**: 100 characters max
+
+### Testing
+- **Test Files**: `test_*.py` or `*_test.py`
+- **Coverage**: Aim for >80%
+- **Markers**: Use pytest markers for test categories
+
+## Troubleshooting
+
+### Pre-commit Issues
+```bash
+pre-commit uninstall
+pre-commit install
+```
+
+### Virtual Environment Issues
+```bash
+rm -rf .venv
+python3 -m venv .venv
+source .venv/Scripts/activate
+pip install -e ".[dev]"
+```
+
+### Git Bash Not Found
+- Install Git for Windows from https://git-scm.com/download/win
+- Add Git Bash to PATH or use full installation
+
+### Tool Not Found
+```bash
+# Ensure dev dependencies installed
+pip install -e ".[dev]"
+```
+
+## Resource Links
+
+- [Ruff Docs](https://docs.astral.sh/ruff/)
+- [Pyright Docs](https://microsoft.github.io/pyright/)
+- [Pre-commit Docs](https://pre-commit.com/)
+- [Pytest Docs](https://docs.pytest.org/)
+- [PEP 8 Style Guide](https://www.python.org/dev/peps/pep-0008/)
+- [Type Hints (PEP 484)](https://www.python.org/dev/peps/pep-0484/)
+
+## Important Notes
+
+1. **Always use Git Bash** for shell commands on Windows
+2. **100 character line limit** enforced across code and docs
+3. **Type hints required** for Pyright compatibility
+4. **Pre-commit hooks** run automatically before commits
+5. **Generated docs** must go to `generated/docs-copilot/`
+6. **Tests required** for new features
+7. **Code must pass** all linting and type checking
+

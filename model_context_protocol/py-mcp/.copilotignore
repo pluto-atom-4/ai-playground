@@ -1,0 +1,38 @@
+# GitHub Copilot Instructions for py-mcp Project
+# This file contains instructions for GitHub Copilot to follow when generating code.
+
+## Shell Environment
+# Use git bash for all shell commands and scripts
+# Commands should be compatible with bash.exe (Git Bash on Windows)
+
+## Output Directory
+# Generated documents should be saved to: generated/docs-copilot/
+# Copilot will store all generated documentation in this subdirectory
+
+## Code Style Guidelines
+# Follow the project configuration in pyproject.toml for:
+# - Line length: 100 characters
+# - Python version: 3.8+
+# - Code formatting: ruff format
+# - Linting: ruff lint
+# - Type checking: pyright
+
+## Development Tools
+# The project uses:
+# - pre-commit hooks for code quality
+# - markdownlint for Markdown files
+# - ruff-format for Python code formatting
+# - ruff for linting
+# - pyright for type checking
+
+## Project Structure
+# src/          - Source code
+# tests/        - Test files
+# generated/    - Generated outputs
+#   docs-copilot/ - Copilot-generated documentation
+
+## Git Bash Requirement
+# All shell scripts and commands must work with Git Bash (bash.exe)
+# Avoid using PowerShell or Windows-specific commands
+# Use forward slashes (/) for file paths
+
