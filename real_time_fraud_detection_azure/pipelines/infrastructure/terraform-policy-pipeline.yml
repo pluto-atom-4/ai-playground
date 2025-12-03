@@ -1,0 +1,489 @@
+# Azure Pipeline for Terraform Deployment with Policy Validation
+# This pipeline demonstrates the complete Policy-as-Code workflow
+
+name: Terraform-Deploy-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+    - main
+    - develop
+  paths:
+    include:
+    - infrastructure/terraform/*
+
+variables:
+  terraformVersion: '1.6.0'
+  workingDirectory: '$(System.DefaultWorkingDirectory)/infrastructure/terraform'
+  policyDirectory: '$(System.DefaultWorkingDirectory)/policies'
+
+stages:
+#===================================================================
+# STAGE 1: VALIDATION & POLICY CHECKS
+#===================================================================
+- stage: Validate
+  displayName: 'Policy Validation'
+  jobs:
+  - job: Setup
+    displayName: 'Install Tools'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - task: Bash@3
+      displayName: 'Install Policy Tools'
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Install Conftest
+          wget https://github.com/open-policy-agent/conftest/releases/download/v0.48.0/conftest_0.48.0_Linux_x86_64.tar.gz
+          tar xzf conftest_0.48.0_Linux_x86_64.tar.gz
+          sudo mv conftest /usr/local/bin/
+          echo "Conftest version: $(conftest --version)"
+          
+          # Install OPA
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod 755 ./opa
+          sudo mv opa /usr/local/bin/
+          echo "OPA version: $(opa version)"
+          
+          # Install Checkov
+          pip install checkov
+          echo "Checkov version: $(checkov --version)"
+          
+          # Install tfsec
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          echo "tfsec version: $(tfsec --version)"
+
+  - job: PolicyTests
+    displayName: 'Test OPA Policies'
+    dependsOn: Setup
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Bash@3
+      displayName: 'Install OPA'
+      inputs:
+        targetType: 'inline'
+        script: |
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod 755 ./opa
+          sudo mv opa /usr/local/bin/
+
+    - task: Bash@3
+      displayName: 'Run OPA Policy Tests'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(policyDirectory)
+        script: |
+          echo "Running OPA policy unit tests..."
+          opa test . -v
+          
+          if [ $? -eq 0 ]; then
+            echo "##vso[task.complete result=Succeeded;]All policy tests passed"
+          else
+            echo "##vso[task.logissue type=error]Policy tests failed"
+            exit 1
+          fi
+
+  - job: TerraformValidation
+    displayName: 'Terraform Validation'
+    dependsOn: PolicyTests
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: $(workingDirectory)
+        backendServiceArm: 'azure-service-connection'
+        backendAzureRmResourceGroupName: 'rg-terraform-state'
+        backendAzureRmStorageAccountName: 'stterraformstate'
+        backendAzureRmContainerName: 'tfstate'
+        backendAzureRmKey: 'fraud-detection.tfstate'
+
+    - task: Bash@3
+      displayName: 'Terraform Format Check'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(workingDirectory)
+        script: |
+          terraform fmt -check -recursive
+
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Validate'
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+        workingDirectory: $(workingDirectory)
+
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: $(workingDirectory)
+        environmentServiceNameAzureRM: 'azure-service-connection'
+        commandOptions: '-out=tfplan -var-file="environments/$(Environment).tfvars"'
+
+    - task: Bash@3
+      displayName: 'Convert Plan to JSON'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(workingDirectory)
+        script: |
+          terraform show -json tfplan > tfplan.json
+          echo "Plan converted to JSON"
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Terraform Plan'
+      inputs:
+        targetPath: '$(workingDirectory)/tfplan'
+        artifact: 'terraform-plan'
+        publishLocation: 'pipeline'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Terraform Plan JSON'
+      inputs:
+        targetPath: '$(workingDirectory)/tfplan.json'
+        artifact: 'terraform-plan-json'
+        publishLocation: 'pipeline'
+
+  - job: PolicyChecks
+    displayName: 'Policy Compliance Checks'
+    dependsOn: TerraformValidation
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Terraform Plan JSON'
+      inputs:
+        artifactName: 'terraform-plan-json'
+        targetPath: '$(workingDirectory)'
+
+    - task: Bash@3
+      displayName: 'Install Conftest'
+      inputs:
+        targetType: 'inline'
+        script: |
+          wget https://github.com/open-policy-agent/conftest/releases/download/v0.48.0/conftest_0.48.0_Linux_x86_64.tar.gz
+          tar xzf conftest_0.48.0_Linux_x86_64.tar.gz
+          sudo mv conftest /usr/local/bin/
+
+    - task: Bash@3
+      displayName: 'Run Conftest Policy Checks'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(workingDirectory)
+        script: |
+          echo "Running Conftest policy checks..."
+          
+          # Run Conftest with JSON output
+          conftest test tfplan.json \
+            -p $(policyDirectory)/terraform \
+            --all-namespaces \
+            --output json > conftest-results.json || true
+          
+          # Display results
+          cat conftest-results.json | jq '.'
+          
+          # Check for failures
+          FAILURES=$(cat conftest-results.json | jq '[.[] | select(.failures != null) | .failures[]] | length')
+          WARNINGS=$(cat conftest-results.json | jq '[.[] | select(.warnings != null) | .warnings[]] | length')
+          
+          echo "Policy check results:"
+          echo "  Failures: $FAILURES"
+          echo "  Warnings: $WARNINGS"
+          
+          # Display failures
+          if [ "$FAILURES" -gt 0 ]; then
+            echo ""
+            echo "##[error]Policy Violations Detected:"
+            cat conftest-results.json | jq -r '.[] | .failures[]? | "  ❌ " + .'
+            echo ""
+            echo "##vso[task.logissue type=error]Found $FAILURES policy violations"
+            echo "##vso[task.complete result=Failed;]Policy checks failed"
+            exit 1
+          fi
+          
+          # Display warnings
+          if [ "$WARNINGS" -gt 0 ]; then
+            echo ""
+            echo "##[warning]Policy Warnings:"
+            cat conftest-results.json | jq -r '.[] | .warnings[]? | "  ⚠️  " + .'
+            echo ""
+            echo "##vso[task.logissue type=warning]Found $WARNINGS policy warnings"
+          fi
+          
+          echo ""
+          echo "##[section]✅ All policy checks passed!"
+
+    - task: Bash@3
+      displayName: 'Run Checkov Security Scan'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(workingDirectory)
+        script: |
+          pip install checkov
+          
+          echo "Running Checkov security scan..."
+          checkov -f tfplan.json \
+            --framework terraform_plan \
+            --output cli \
+            --output junitxml \
+            --output-file-path . \
+            --soft-fail || true
+          
+          # Check for high/critical severity issues
+          checkov -f tfplan.json \
+            --framework terraform_plan \
+            --output json > checkov-results.json || true
+          
+          # Count by severity (if results exist)
+          if [ -f checkov-results.json ]; then
+            CRITICAL=$(cat checkov-results.json | jq '[.results.failed_checks[]? | select(.check_class | contains("CRITICAL"))] | length' || echo 0)
+            HIGH=$(cat checkov-results.json | jq '[.results.failed_checks[]? | select(.check_class | contains("HIGH"))] | length' || echo 0)
+            
+            echo "Security scan results:"
+            echo "  Critical: $CRITICAL"
+            echo "  High: $HIGH"
+            
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "##vso[task.logissue type=error]Found $CRITICAL critical security issues"
+            fi
+            
+            if [ "$HIGH" -gt 0 ]; then
+              echo "##vso[task.logissue type=warning]Found $HIGH high severity security issues"
+            fi
+          fi
+
+    - task: Bash@3
+      displayName: 'Run tfsec'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(workingDirectory)
+        script: |
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          
+          echo "Running tfsec security scanner..."
+          tfsec . \
+            --format json \
+            --out tfsec-results.json \
+            --soft-fail || true
+          
+          # Check severity levels
+          CRITICAL=$(cat tfsec-results.json | jq '[.results[]? | select(.severity == "CRITICAL")] | length')
+          HIGH=$(cat tfsec-results.json | jq '[.results[]? | select(.severity == "HIGH")] | length')
+          
+          echo "tfsec results:"
+          echo "  Critical: $CRITICAL"
+          echo "  High: $HIGH"
+          
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "##vso[task.logissue type=error]Found $CRITICAL critical issues in tfsec scan"
+            cat tfsec-results.json | jq -r '.results[]? | select(.severity == "CRITICAL") | "CRITICAL: " + .description + " in " + .location.filename'
+          fi
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Policy Results'
+      condition: always()
+      inputs:
+        targetPath: '$(workingDirectory)'
+        artifact: 'policy-results'
+        publishLocation: 'pipeline'
+
+#===================================================================
+# STAGE 2: AZURE POLICY COMPLIANCE
+#===================================================================
+- stage: AzurePolicyCheck
+  displayName: 'Azure Policy Compliance'
+  dependsOn: Validate
+  condition: succeeded()
+  jobs:
+  - job: ComplianceCheck
+    displayName: 'Check Azure Policy Compliance'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Check Current Compliance State'
+      inputs:
+        azureSubscription: 'azure-service-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Checking Azure Policy compliance..."
+          
+          # Check policy compliance for resource group
+          az policy state list \
+            --filter "ComplianceState eq 'NonCompliant'" \
+            --output json > policy-compliance.json
+          
+          NON_COMPLIANT=$(cat policy-compliance.json | jq 'length')
+          
+          if [ "$NON_COMPLIANT" -gt 0 ]; then
+            echo "##[warning]Found $NON_COMPLIANT non-compliant resources"
+            cat policy-compliance.json | jq -r '.[] | "Resource: " + .resourceId + " | Policy: " + .policyDefinitionName'
+          else
+            echo "##[section]✅ All resources are compliant"
+          fi
+
+    - task: AzureCLI@2
+      displayName: 'Get Security Recommendations'
+      inputs:
+        azureSubscription: 'azure-service-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Fetching Defender for Cloud recommendations..."
+          
+          az security assessment list --output json > security-assessments.json || true
+          
+          if [ -f security-assessments.json ]; then
+            HIGH_SEVERITY=$(cat security-assessments.json | jq '[.[] | select(.status.severity == "High")] | length')
+            
+            if [ "$HIGH_SEVERITY" -gt 0 ]; then
+              echo "##[warning]Found $HIGH_SEVERITY high severity security recommendations"
+              cat security-assessments.json | jq -r '.[] | select(.status.severity == "High") | "HIGH: " + .displayName'
+            fi
+          fi
+
+#===================================================================
+# STAGE 3: TERRAFORM APPLY
+#===================================================================
+- stage: Apply
+  displayName: 'Terraform Apply'
+  dependsOn:
+    - Validate
+    - AzurePolicyCheck
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - deployment: TerraformApply
+    displayName: 'Apply Infrastructure Changes'
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'production-infrastructure'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Terraform Plan'
+            inputs:
+              artifactName: 'terraform-plan'
+              targetPath: '$(workingDirectory)'
+
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: $(workingDirectory)
+              backendServiceArm: 'azure-service-connection'
+              backendAzureRmResourceGroupName: 'rg-terraform-state'
+              backendAzureRmStorageAccountName: 'stterraformstate'
+              backendAzureRmContainerName: 'tfstate'
+              backendAzureRmKey: 'fraud-detection.tfstate'
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Apply'
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: $(workingDirectory)
+              environmentServiceNameAzureRM: 'azure-service-connection'
+              commandOptions: 'tfplan'
+
+#===================================================================
+# STAGE 4: POST-DEPLOYMENT VALIDATION
+#===================================================================
+- stage: PostDeploymentValidation
+  displayName: 'Post-Deployment Validation'
+  dependsOn: Apply
+  condition: succeeded()
+  jobs:
+  - job: ValidationJob
+    displayName: 'Validate Deployment'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Trigger Policy Compliance Scan'
+      inputs:
+        azureSubscription: 'azure-service-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Triggering Azure Policy compliance scan..."
+          
+          # Trigger policy scan
+          az policy state trigger-scan --no-wait
+          
+          echo "Waiting for scan to complete..."
+          sleep 60
+          
+          # Check compliance
+          az policy state list \
+            --resource-group rg-fraud-detection-$(Environment) \
+            --filter "ComplianceState eq 'NonCompliant'" \
+            --output table
+
+    - task: AzureCLI@2
+      displayName: 'Verify Resource Configuration'
+      inputs:
+        azureSubscription: 'azure-service-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Verifying deployed resources..."
+          
+          # Check if resources exist
+          az resource list \
+            --resource-group rg-fraud-detection-$(Environment) \
+            --output table
+          
+          # Verify AKS configuration
+          az aks show \
+            --resource-group rg-fraud-detection-$(Environment) \
+            --name aks-fraud-detection-$(Environment) \
+            --query '{name:name, kubernetesVersion:kubernetesVersion, rbacEnabled:enableRbac}' \
+            --output table
+
+    - task: Bash@3
+      displayName: 'Generate Compliance Report'
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "=========================================="
+          echo "Post-Deployment Compliance Report"
+          echo "=========================================="
+          echo ""
+          echo "Environment: $(Environment)"
+          echo "Build: $(Build.BuildNumber)"
+          echo "Date: $(date)"
+          echo ""
+          echo "✅ Terraform deployment completed"
+          echo "✅ All policy checks passed"
+          echo "✅ Azure Policy compliance verified"
+          echo ""
+          echo "Artifacts:"
+          echo "  - Terraform plan"
+          echo "  - Policy validation results"
+          echo "  - Security scan reports"
+

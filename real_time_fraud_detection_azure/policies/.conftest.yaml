@@ -1,0 +1,32 @@
+# Conftest Configuration
+# https://www.conftest.dev/options/
+
+# Policy paths to search
+policy:
+  - policies/terraform
+  - policies/kubernetes
+
+# Default namespace
+namespace: main
+
+# All namespaces (include all policy packages)
+all-namespaces: true
+
+# Output format (tap, table, json, github)
+output: table
+
+# Fail on warnings
+fail-on-warn: false
+
+# Show successes
+no-fail: false
+
+# Combine results
+combine: false
+
+# Trace output (for debugging)
+trace: false
+
+# Suppress exceptions
+suppress-exceptions: false
+
