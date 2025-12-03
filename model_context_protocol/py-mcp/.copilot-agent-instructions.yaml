@@ -1,0 +1,200 @@
+## Agent Instruction Configuration
+## Purpose: Control Copilot behavior and suppress excessive file generation
+
+# File Generation Rules
+file_generation:
+  # Output directory for all generated files
+  output_directory: "generated/docs-copilot"
+
+  # All generated documentation goes to output_directory
+  generate_to_subdirectory: true
+
+  # Suppress duplicate/redundant documentation files in root
+  suppress_patterns:
+    - "COMPLETION-SUMMARY.*"
+    - "FINAL-.*"
+    - "IMPLEMENTATION.*"
+    - "*-COMPLETE.*"
+    - "*-STATUS.*"
+    - "*-SUMMARY.*"
+    - "*-REPORT.*"
+    - "QUICK_REFERENCE.*"
+    - "INDEX.*"
+    - "MANIFEST.*"
+    - "CONFIGURATION.*"
+    - "DELIVERABLES.*"
+
+  # Root-level files to preserve (do not generate in subdirectory)
+  root_level_only:
+    - "README.md"
+    - "CONTRIBUTING.md"
+    - "LICENSE"
+    - ".copilot-agent-instructions.yaml"
+
+  # Maximum number of markdown documentation files to create per session
+  max_documentation_files: 1
+
+  # Only generate files if explicitly requested by the user
+  require_explicit_request: true
+
+  # Create output directory if it doesn't exist
+  create_output_dir: true
+
+# Documentation Generation Rules
+documentation:
+  # Avoid creating multiple summary/status/report files
+  prevent_redundant_files: true
+
+  # Output directory for all generated documentation
+  output_directory: "generated/docs-copilot"
+
+  # Focus on single source of truth in root
+  primary_file: "README.md"
+
+  # List of acceptable documentation patterns and locations
+  allowed_patterns:
+    - "README.md (root only)"
+    - "README-*.md (root only)"
+    - "SETUP.md (root only)"
+    - "CONTRIBUTING.md (root only)"
+    - "LICENSE (root only)"
+    - ".md files in generated/docs-copilot/ (generated docs)"
+    - ".md files in src/ or docs/ (source documentation)"
+
+  # Generated files go here
+  generated_doc_location: "generated/docs-copilot/"
+
+  # Example generated files (in subdirectory):
+  generated_file_examples:
+    - "generated/docs-copilot/QUICKSTART.md"
+    - "generated/docs-copilot/SETUP_INFO.md"
+    - "generated/docs-copilot/API_REFERENCE.md"
+    - "generated/docs-copilot/CHECKLIST.md"
+
+# Code Generation Rules
+code_generation:
+  # Always confirm before creating new files
+  require_confirmation: true
+
+  # Focus on modifying existing files
+  prefer_modifications: true
+
+# Output Rules
+output:
+  # Directory configuration
+  generated_files_directory: "generated/docs-copilot"
+
+  # Ensure all generated documentation goes to this directory
+  enforce_output_directory: true
+
+  # Be concise in responses
+  max_explanation_length: 500
+
+  # Avoid creating status/completion files in root
+  no_status_files_in_root: true
+
+  # If status files needed, place them in subdirectory
+  status_file_location: "generated/docs-copilot/STATUS.md"
+
+  # Do not create multiple versions of the same file
+  no_duplicate_versioning: true
+
+  # Example correct paths:
+  correct_file_paths:
+    - "generated/docs-copilot/QUICKSTART.md"
+    - "generated/docs-copilot/CHECKLIST.md"
+    - "generated/docs-copilot/SETUP_INFO.md"
+
+  # Example incorrect paths (DO NOT CREATE):
+  incorrect_file_paths:
+    - "FINAL-SUMMARY.txt (root)"
+    - "IMPLEMENTATION-COMPLETE.md (root)"
+    - "COMPLETION-SUMMARY.txt (root)"
+    - "FINAL-STATUS.txt (root)"
+
+# Workflow
+workflow:
+  # Only create what's necessary for the task
+  minimal_generation: true
+
+  # Clean up redundant files if requested
+  cleanup_enabled: true
+
+  # Generate a single comprehensive update document if needed (optional)
+  summary_on_request_only: true
+
+# Git & Bash Configuration
+git:
+  # Use git bash for all terminal operations
+  shell: "bash.exe"
+  shell_type: "Git Bash"
+  shell_path: "/c/Users"
+
+  # Git operations should use bash
+  prefer_bash_for_git: true
+
+  # Default git operations
+  default_branch: "main"
+  auto_stage_changes: false
+  commit_message_template: "fix: {description}"
+
+bash:
+  # Terminal execution preferences
+  shell_command: "bash.exe"
+  use_posix_paths: true
+  path_conversion: true
+
+  # Path handling for Git Bash on Windows
+  path_style: "posix"
+  # Convert Windows paths (C:\...) to POSIX (/c/...)
+  auto_path_conversion: true
+
+  # Command execution
+  prefer_bash_commands: true
+  bash_aliases_support: true
+
+  # Environment
+  environment:
+    SHELL: "bash"
+    TERM: "cygwin"
+
+# Terminal Operations
+terminal:
+  # Always use git bash for terminal commands
+  default_shell: "bash.exe"
+
+  # Command formatting
+  command_style: "bash"
+
+  # Common operations to use bash
+  use_bash_for:
+    - "git operations"
+    - "npm/node commands"
+    - "python development"
+    - "file operations"
+    - "directory navigation"
+    - "script execution"
+
+  # Avoid cmd.exe for these operations
+  never_use_cmd_for:
+    - "grep or pattern matching"
+    - "sed operations"
+    - "awk operations"
+    - "complex piping"
+    - "git commands"
+
+# Development Tooling
+development:
+  # Use bash for development tasks
+  build_shell: "bash.exe"
+  test_shell: "bash.exe"
+  package_shell: "bash.exe"
+
+  # Git-based workflows
+  enable_git_hooks: true
+  pre_commit_bash: true
+
+  # Script execution
+  script_language: "bash"
+  execute_via: "bash.exe"
+
