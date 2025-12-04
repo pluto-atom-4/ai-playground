@@ -408,6 +408,47 @@ When generating code or configurations, prefer:
 - **Consider security**: Always
 - **Consider cost**: Always (Azure cost optimization)
 
+### Console Output Guidelines ⚠️
+
+**CRITICAL**: Suppress verbose console output and status displays.
+
+#### ❌ DO NOT Output These
+- ASCII art boxes, borders, or decorative elements (╔═╗║╚═╝)
+- Status summary tables with checkmarks and icons
+- Multi-section completion reports with visual separators
+- "What Was Created" summaries with bullet points
+- Verification checklists with status indicators
+- Cross-reference summaries
+- Documentation hierarchy diagrams in console
+- Ready-to-deploy messages with emojis
+- Any form of console decoration or formatting
+
+#### ✅ INSTEAD Use Concise Output
+- Brief status messages: "✓ Done: [action description]"
+- Error messages only when necessary
+- Single-line confirmations when task completes
+- Direct answers to user questions without preamble
+- Focus on actionable information, not summaries
+
+#### Output Examples
+**❌ AVOID:**
+```
+╔════════════════════════════════════════════════════════════════╗
+║     📋 CONSOLIDATION SUMMARY - COMPLETE ✓                      ║
+╚════════════════════════════════════════════════════════════════╝
+✅ 1. UPDATED: policies/README.md
+   • Added comprehensive overview
+   • Included quick start guide
+✅ 2. UPDATED: docs/policy_as_code_inspection_automation.md
+```
+
+**✅ DO:**
+```
+✓ Updated: policies/README.md
+✓ Updated: docs/policy_as_code_inspection_automation.md
+✓ Deleted: policies/IMPLEMENTATION_SUMMARY.md
+```
+
 ### When Suggesting Code
 - Always consider performance implications
 - Always consider security implications
@@ -426,7 +467,9 @@ When working in this codebase:
 5. ✅ **Test OPA policies** with unit tests
 6. ✅ **Structure Azure Pipelines** with security gates
 7. ✅ **Optimize for Git Bash** on Windows
-8. ❌ **Do NOT generate** excessive meta-documentation files
-9. ❌ **Do NOT create** START_HERE, QUICK_REFERENCE, MODULE_GUIDE, etc.
-10. ✅ **Save generated docs ONLY** to `generated/docs-copilot/`
+8. ✅ **Keep console output concise** - no ASCII art or verbose summaries
+9. ❌ **Do NOT generate** excessive meta-documentation files
+10. ❌ **Do NOT create** START_HERE, QUICK_REFERENCE, MODULE_GUIDE, etc.
+11. ❌ **Do NOT output** decorative boxes, status tables, or emoji-filled messages
+12. ✅ **Save generated docs ONLY** to `generated/docs-copilot/`
 
