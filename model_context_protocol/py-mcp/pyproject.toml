@@ -1,3 +1,4 @@
+# toml
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -6,39 +7,38 @@ build-backend = "setuptools.build_meta"
 name = "py-mcp"
 version = "0.1.0"
 description = "Python Model Context Protocol"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.23.3",
     "anyio>=4.12.0",
 ]
+
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Akai Kaede", email = "it.scope@gmail.com"}
 ]
 readme = "README.md"
 license = {text = "MIT"}
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "License :: OSI Approved :: MIT License",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0",
-    "ruff>=0.1.0",
-    "pyright>=1.1.300",
-    "pre-commit>=3.0",
-    "mdformat>=1.0.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.5.0",
+    "pyright>=1.1.350",
+    "pre-commit>=4.0",
+    "mdformat>=0.7.0",
 ]
 
 [tool.ruff]
-line-length = 100
-target-version = "py38"
+# removed top-level line-length (use tool.ruff.format)
+target-version = "py310"
 exclude = [
     ".git",
     ".venv",
@@ -50,25 +50,25 @@ exclude = [
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # Pyflakes
-    "I",      # isort
-    "C",      # flake8-comprehensions
-    "B",      # flake8-bugbear
-    "UP",     # pyupgrade
-    "ARG",    # flake8-unused-arguments
-    "SIM",    # flake8-simplify
-    "LOG",    # flake8-logging-format
+    "E",
+    "W",
+    "F",
+    "I",
+    "C",
+    "B",
+    "UP",
+    "ARG",
+    "SIM",
+    "LOG",
 ]
 ignore = [
-    "E501",   # Line too long (handled by formatter)
-    "E741",   # Ambiguous variable name
+    "E501",
+    "E741",
 ]
 
 [tool.ruff.format]
 line-length = 100
-indent-width = 4
+indent-style = "space"
 
 [tool.pyright]
 include = ["src"]
@@ -84,7 +84,7 @@ exclude = [
 typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
-pythonVersion = "3.8"
+pythonVersion = "3.10"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
@@ -113,4 +113,3 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "class .*Protocol.*:",
 ]
-
