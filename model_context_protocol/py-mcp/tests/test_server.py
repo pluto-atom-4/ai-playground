@@ -1,56 +1,34 @@
 """
-Tests for the MCP Server implementation.
+Tests for the MCP Server implementation using FastMCP (decorator API).
 """
 
-import pytest
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from src.server import MCPServer
+from server import echo_string, add_numbers, get_string_length
 
 
 class TestMCPServer:
-    """Test cases for MCPServer."""
+    """Test cases for MCP server tools (FastMCP decorator API)."""
 
-    @pytest.fixture
-    def server(self) -> MCPServer:
-        """Fixture to provide a fresh MCPServer instance."""
-        return MCPServer()
-
-    def test_server_initialization(self, server: MCPServer) -> None:
-        """Test that the server initializes correctly."""
-        assert server is not None
-        assert server.get_server() is not None
-
-    def test_server_has_tools(self, server: MCPServer) -> None:
-        """Test that the server has registered tools."""
-        mcp_server = server.get_server()
-        assert mcp_server is not None
-        # The server should have tools registered
-        # (specific tool verification depends on MCP SDK implementation)
-
-    @pytest.mark.asyncio
-    async def test_echo_string_handler(self, server: MCPServer) -> None:
-        """Test the echo_string tool handler."""
-        result = await server._handle_echo_string("test message")
+    def test_echo_string(self):
+        result = echo_string("test message")
         assert result is not None
-        assert not result.isError
-        assert len(result.content) > 0
-        assert "test message" in result.content[0].text
+        assert not result["isError"]
+        assert len(result["content"]) > 0
+        assert "test message" in result["content"][0].text
 
-    @pytest.mark.asyncio
-    async def test_add_numbers_handler(self, server: MCPServer) -> None:
-        """Test the add_numbers tool handler."""
-        result = await server._handle_add_numbers(5, 3)
+    def test_add_numbers(self):
+        result = add_numbers(5, 3)
         assert result is not None
-        assert not result.isError
-        assert len(result.content) > 0
-        assert "8" in result.content[0].text
+        assert not result["isError"]
+        assert len(result["content"]) > 0
+        assert result["content"][0].text == "8"
 
-    @pytest.mark.asyncio
-    async def test_get_string_length_handler(self, server: MCPServer) -> None:
-        """Test the get_string_length tool handler."""
-        result = await server._handle_get_string_length("hello")
+    def test_get_string_length(self):
+        result = get_string_length("hello")
         assert result is not None
-        assert not result.isError
-        assert len(result.content) > 0
-        assert "5" in result.content[0].text
-
+        assert not result["isError"]
+        assert len(result["content"]) > 0
+        assert result["content"][0].text == "5"
