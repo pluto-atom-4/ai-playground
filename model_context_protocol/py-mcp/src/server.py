@@ -5,10 +5,9 @@ This module implements a basic Model Context Protocol server with example tools.
 """
 
 import logging
-from typing import Any
 
 from mcp.server import Server
-from mcp.types import Tool, TextContent, ToolResult
+from mcp.types import Tool, TextContent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -80,36 +79,27 @@ class MCPServer:
             self._handle_get_string_length,
         )
 
-    async def _handle_echo_string(self, message: str) -> ToolResult:
+    async def _handle_echo_string(self, message: str) -> list[TextContent]:
         """Handle the echo_string tool call."""
         logger.info(f"Echoing message: {message}")
-        return ToolResult(
-            content=[TextContent(type="text", text=f"Echo: {message}")],
-            isError=False,
-        )
+        return [TextContent(type="text", text=f"Echo: {message}")]
 
-    async def _handle_add_numbers(self, a: float, b: float) -> ToolResult:
+    async def _handle_add_numbers(self, a: float, b: float) -> list[TextContent]:
         """Handle the add_numbers tool call."""
         result = a + b
         logger.info(f"Adding {a} + {b} = {result}")
-        return ToolResult(
-            content=[TextContent(type="text", text=f"Result: {a} + {b} = {result}")],
-            isError=False,
-        )
+        return [TextContent(type="text", text=f"Result: {a} + {b} = {result}")]
 
-    async def _handle_get_string_length(self, text: str) -> ToolResult:
+    async def _handle_get_string_length(self, text: str) -> list[TextContent]:
         """Handle the get_string_length tool call."""
         length = len(text)
         logger.info(f"String '{text}' has length {length}")
-        return ToolResult(
-            content=[
-                TextContent(
-                    type="text",
-                    text=f"The string '{text}' has {length} characters",
-                )
-            ],
-            isError=False,
-        )
+        return [
+            TextContent(
+                type="text",
+                text=f"The string '{text}' has {length} characters",
+            )
+        ]
 
     def get_server(self) -> Server:
         """Get the underlying MCP Server instance."""
