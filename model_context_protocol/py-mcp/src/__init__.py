@@ -1,11 +1,9 @@
 """
 Python MCP Server package.
 
-A simple implementation of the Model Context Protocol server.
+A simple implementation of the Model Context Protocol server using FastMCP.
 """
 
-from .server import MCPServer
-
 __version__ = "0.1.0"
-__all__ = ["MCPServer"]
+__all__ = ["server", "echo"]
 
