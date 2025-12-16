@@ -1,0 +1,222 @@
+###
+### MCP Echo Server - HTTP Requests for Testing
+### Base URL: http://localhost:8000
+### Documentation: FastMCP Echo Server endpoints for inspecting server behaviors
+###
+
+### 1. SIMPLE ECHO TEST
+### Test: Echo a simple greeting message
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "Hello, World!"
+  }
+}
+
+###
+
+### 2. ECHO EMPTY STRING
+### Test: Echo behavior with empty string input
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": ""
+  }
+}
+
+###
+
+### 3. ECHO WITH SPECIAL CHARACTERS
+### Test: Echo preserves special characters, newlines, and tabs
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "Line 1\nLine 2\tTabbed\n\"Quoted\" text"
+  }
+}
+
+###
+
+### 4. ECHO UNICODE CHARACTERS
+### Test: Echo supports Unicode/emoji characters
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "你好世界 🌍 Привет 🚀"
+  }
+}
+
+###
+
+### 5. ECHO LONG STRING
+### Test: Echo handles large messages (1000+ characters)
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+  }
+}
+
+###
+
+### 6. ECHO JSON CONTENT
+### Test: Echo can handle JSON strings without parsing
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "{\"key\": \"value\", \"nested\": {\"item\": 42}}"
+  }
+}
+
+###
+
+### 7. STATIC RESOURCE ENDPOINT
+### Test: Retrieve static echo resource
+GET http://localhost:8000/api/resources/echo/static
+Accept: text/plain
+
+###
+
+### 8. TEMPLATE RESOURCE WITH PATH PARAMETER
+### Test: Echo template resource with URL parameter substitution
+GET http://localhost:8000/api/resources/echo/Hello%20from%20Template
+Accept: text/plain
+
+###
+
+### 9. TEMPLATE RESOURCE WITH SPECIAL CHARACTERS
+### Test: Template resource handles special characters in parameters
+GET http://localhost:8000/api/resources/echo/Hello%3FWorld%26test%3Dvalue
+Accept: text/plain
+
+###
+
+### 10. PROMPT ENDPOINT - SIMPLE
+### Test: Echo prompt with simple text
+POST http://localhost:8000/api/prompts/Echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "text": "Create a test case"
+  }
+}
+
+###
+
+### 11. PROMPT ENDPOINT - WITH PLACEHOLDER
+### Test: Echo prompt with placeholder text
+POST http://localhost:8000/api/prompts/Echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "text": "Generate test for {component_name}"
+  }
+}
+
+###
+
+### 12. LIST AVAILABLE TOOLS
+### Test: Get list of all available tools on echo server
+GET http://localhost:8000/api/tools
+Accept: application/json
+
+###
+
+### 13. LIST AVAILABLE RESOURCES
+### Test: Get list of all available resources on echo server
+GET http://localhost:8000/api/resources
+Accept: application/json
+
+###
+
+### 14. LIST AVAILABLE PROMPTS
+### Test: Get list of all available prompts on echo server
+GET http://localhost:8000/api/prompts
+Accept: application/json
+
+###
+
+### 15. SERVER INFO/HEALTH CHECK
+### Test: Get server information and health status
+GET http://localhost:8000/api/info
+Accept: application/json
+
+###
+
+### 16. ECHO WITH MULTILINE TEXT
+### Test: Echo preserves multi-line text formatting
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "def hello():\n    print('Hello')\n    return True"
+  }
+}
+
+###
+
+### 17. ECHO HTML CONTENT
+### Test: Echo can handle HTML strings without rendering
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "<html><body><h1>Test</h1><p>Content</p></body></html>"
+  }
+}
+
+###
+
+### 18. ECHO WITH BACKSLASHES
+### Test: Echo handles escaped characters correctly
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "C:\\Users\\test\\path\\file.txt"
+  }
+}
+
+###
+
+### 19. VERIFY RESPONSE FORMAT
+### Test: Verify echo response contains required fields
+### Expected response structure:
+###   - content: array of content objects
+###   - isError: boolean flag
+###   - content[].type: "text"
+###   - content[].text: echoed message
+POST http://localhost:8000/api/tools/echo
+Content-Type: application/json
+
+{
+  "arguments": {
+    "message": "Test response format validation"
+  }
+}
+
+###
+
+### 20. RESOURCE WITH UNICODE IN PARAMETER
+### Test: Template resource with Unicode characters
+GET http://localhost:8000/api/resources/echo/%E4%BD%A0%E5%A5%BD
+Accept: text/plain
+
+###
