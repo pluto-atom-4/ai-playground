@@ -1,0 +1,653 @@
+### Complex Inputs MCP Server - HTTP Requests
+### Test suite for complex input validation and Pydantic models
+### Base URL: http://127.0.0.1:8000
+
+### ============================================================
+### 1. Health Check
+### ============================================================
+
+GET http://127.0.0.1:8000/health
+Accept: application/json
+
+###
+
+### ============================================================
+### 2. List Available Tools
+### ============================================================
+
+GET http://127.0.0.1:8000/api/tools
+Accept: application/json
+
+###
+
+### ============================================================
+### 3. Root Endpoint - API Documentation
+### ============================================================
+
+GET http://127.0.0.1:8000/
+Accept: application/json
+
+###
+
+### ============================================================
+### 4. Name Shrimp - Basic Test
+### ============================================================
+### List all shrimp names in tank with optional extra names
+
+POST http://127.0.0.1:8000/api/tools/name_shrimp
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Main Tank",
+    "capacity": 50,
+    "shrimp_list": [
+      {
+        "name": "Shrimpy",
+        "species": "Caridina japonica",
+        "age_months": 6
+      },
+      {
+        "name": "Coral",
+        "species": "Neocaridina davidi",
+        "age_months": 12
+      },
+      {
+        "name": "Amber",
+        "species": "Neocaridina davidi",
+        "age_months": 3
+      }
+    ]
+  },
+  "extra_names": ["Tiny", "Buddy"]
+}
+
+###
+
+### ============================================================
+### 5. Name Shrimp - Empty Extra Names
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/name_shrimp
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Secondary Tank",
+    "capacity": 30,
+    "shrimp_list": [
+      {
+        "name": "Scout",
+        "species": "Amano shrimp",
+        "age_months": 24
+      },
+      {
+        "name": "Explorer",
+        "species": "Amano shrimp",
+        "age_months": 18
+      }
+    ]
+  },
+  "extra_names": []
+}
+
+###
+
+### ============================================================
+### 6. Analyze Tank - Single Species
+### ============================================================
+### Get tank statistics including shrimp count and stocking density
+
+POST http://127.0.0.1:8000/api/tools/analyze_tank
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Neocaridina Tank",
+    "capacity": 40,
+    "shrimp_list": [
+      {
+        "name": "Red1",
+        "species": "Neocaridina davidi",
+        "age_months": 8
+      },
+      {
+        "name": "Red2",
+        "species": "Neocaridina davidi",
+        "age_months": 10
+      },
+      {
+        "name": "Red3",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "Red4",
+        "species": "Neocaridina davidi",
+        "age_months": 12
+      }
+    ]
+  }
+}
+
+###
+
+### ============================================================
+### 7. Analyze Tank - Mixed Species
+### ============================================================
+### Tank with multiple species
+
+POST http://127.0.0.1:8000/api/tools/analyze_tank
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Mixed Species Tank",
+    "capacity": 60,
+    "shrimp_list": [
+      {
+        "name": "Crystal",
+        "species": "Caridina cf. cantonensis",
+        "age_months": 14
+      },
+      {
+        "name": "Bamboo",
+        "species": "Caridina japonica",
+        "age_months": 20
+      },
+      {
+        "name": "Whisker",
+        "species": "Neocaridina davidi",
+        "age_months": 7
+      },
+      {
+        "name": "Filter",
+        "species": "Neocaridina davidi",
+        "age_months": 9
+      },
+      {
+        "name": "Amano1",
+        "species": "Amano shrimp",
+        "age_months": 30
+      }
+    ]
+  }
+}
+
+###
+
+### ============================================================
+### 8. Configure Aquarium - Complete Setup
+### ============================================================
+### Configure full aquarium with tank, food, and maintenance
+
+POST http://127.0.0.1:8000/api/tools/configure_aquarium
+Content-Type: application/json
+
+{
+  "setup": {
+    "tank": {
+      "tank_name": "Premium Aquarium",
+      "capacity": 100,
+      "shrimp_list": [
+        {
+          "name": "Chief",
+          "species": "Caridina japonica",
+          "age_months": 24
+        },
+        {
+          "name": "Queen",
+          "species": "Caridina japonica",
+          "age_months": 20
+        },
+        {
+          "name": "Scout1",
+          "species": "Neocaridina davidi",
+          "age_months": 8
+        },
+        {
+          "name": "Scout2",
+          "species": "Neocaridina davidi",
+          "age_months": 6
+        }
+      ]
+    },
+    "food": [
+      {
+        "name": "Premium Pellets",
+        "protein_percent": 45.5
+      },
+      {
+        "name": "Spirulina Flakes",
+        "protein_percent": 60.0
+      },
+      {
+        "name": "Algae Wafers",
+        "protein_percent": 35.0
+      }
+    ],
+    "maintenance_schedule": {
+      "Monday": "50% water change",
+      "Wednesday": "Feed premium pellets",
+      "Friday": "Clean filter, Feed spirulina",
+      "Sunday": "Water test, Top off"
+    }
+  },
+  "notes": "High-quality setup with diverse food options and regular maintenance"
+}
+
+###
+
+### ============================================================
+### 9. Configure Aquarium - Minimal Setup
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/configure_aquarium
+Content-Type: application/json
+
+{
+  "setup": {
+    "tank": {
+      "tank_name": "Starter Tank",
+      "capacity": 20,
+      "shrimp_list": [
+        {
+          "name": "New",
+          "species": "Neocaridina davidi",
+          "age_months": 1
+        }
+      ]
+    },
+    "food": [
+      {
+        "name": "Basic Pellets",
+        "protein_percent": 40.0
+      }
+    ],
+    "maintenance_schedule": {
+      "Monday": "Water change",
+      "Thursday": "Feed pellets"
+    }
+  },
+  "notes": ""
+}
+
+###
+
+### ============================================================
+### 10. Find Shrimp by Species - Neocaridina
+### ============================================================
+### Search for specific species in tank
+
+POST http://127.0.0.1:8000/api/tools/find_shrimp_by_species
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Diverse Tank",
+    "capacity": 80,
+    "shrimp_list": [
+      {
+        "name": "RedKing",
+        "species": "Neocaridina davidi",
+        "age_months": 15
+      },
+      {
+        "name": "RedQueen",
+        "species": "Neocaridina davidi",
+        "age_months": 12
+      },
+      {
+        "name": "BlackPrincess",
+        "species": "Neocaridina davidi",
+        "age_months": 8
+      },
+      {
+        "name": "CrystalKing",
+        "species": "Caridina cf. cantonensis",
+        "age_months": 18
+      },
+      {
+        "name": "BambooLord",
+        "species": "Caridina japonica",
+        "age_months": 22
+      }
+    ]
+  },
+  "species": "Neocaridina davidi"
+}
+
+###
+
+### ============================================================
+### 11. Find Shrimp by Species - Caridina
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/find_shrimp_by_species
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Diverse Tank",
+    "capacity": 80,
+    "shrimp_list": [
+      {
+        "name": "RedKing",
+        "species": "Neocaridina davidi",
+        "age_months": 15
+      },
+      {
+        "name": "RedQueen",
+        "species": "Neocaridina davidi",
+        "age_months": 12
+      },
+      {
+        "name": "CrystalKing",
+        "species": "Caridina cf. cantonensis",
+        "age_months": 18
+      },
+      {
+        "name": "BambooLord",
+        "species": "Caridina japonica",
+        "age_months": 22
+      },
+      {
+        "name": "BambooLady",
+        "species": "Caridina japonica",
+        "age_months": 20
+      }
+    ]
+  },
+  "species": "Caridina japonica"
+}
+
+###
+
+### ============================================================
+### 12. Find Shrimp by Species - Case Insensitive
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/find_shrimp_by_species
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Test Tank",
+    "capacity": 50,
+    "shrimp_list": [
+      {
+        "name": "Shrimp1",
+        "species": "Amano shrimp",
+        "age_months": 25
+      },
+      {
+        "name": "Shrimp2",
+        "species": "Amano shrimp",
+        "age_months": 28
+      },
+      {
+        "name": "Shrimp3",
+        "species": "Neocaridina davidi",
+        "age_months": 10
+      }
+    ]
+  },
+  "species": "amano shrimp"
+}
+
+###
+
+### ============================================================
+### 13. Find Shrimp by Species - No Results
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/find_shrimp_by_species
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Test Tank",
+    "capacity": 50,
+    "shrimp_list": [
+      {
+        "name": "Shrimp1",
+        "species": "Neocaridina davidi",
+        "age_months": 10
+      }
+    ]
+  },
+  "species": "Non-existent species"
+}
+
+###
+
+### ============================================================
+### 14. Edge Case - Very Old Shrimp
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/analyze_tank
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Ancient Tank",
+    "capacity": 100,
+    "shrimp_list": [
+      {
+        "name": "Elder",
+        "species": "Caridina japonica",
+        "age_months": 360
+      },
+      {
+        "name": "Ancient",
+        "species": "Caridina japonica",
+        "age_months": 300
+      }
+    ]
+  }
+}
+
+###
+
+### ============================================================
+### 15. Edge Case - High Stocking Density
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/analyze_tank
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Crowded Tank",
+    "capacity": 10,
+    "shrimp_list": [
+      {
+        "name": "S1",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S2",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S3",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S4",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S5",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S6",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S7",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S8",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S9",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      },
+      {
+        "name": "S10",
+        "species": "Neocaridina davidi",
+        "age_months": 5
+      }
+    ]
+  }
+}
+
+###
+
+### ============================================================
+### 16. Complex Setup - Multiple Food Types and Maintenance
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/configure_aquarium
+Content-Type: application/json
+
+{
+  "setup": {
+    "tank": {
+      "tank_name": "Professional Setup",
+      "capacity": 150,
+      "shrimp_list": [
+        {
+          "name": "Alpha",
+          "species": "Caridina japonica",
+          "age_months": 36
+        },
+        {
+          "name": "Beta",
+          "species": "Caridina japonica",
+          "age_months": 34
+        },
+        {
+          "name": "Gamma",
+          "species": "Neocaridina davidi",
+          "age_months": 12
+        },
+        {
+          "name": "Delta",
+          "species": "Neocaridina davidi",
+          "age_months": 10
+        },
+        {
+          "name": "Epsilon",
+          "species": "Amano shrimp",
+          "age_months": 48
+        },
+        {
+          "name": "Zeta",
+          "species": "Caridina cf. cantonensis",
+          "age_months": 20
+        }
+      ]
+    },
+    "food": [
+      {
+        "name": "Sinking Pellets",
+        "protein_percent": 50.0
+      },
+      {
+        "name": "Vegetable Flakes",
+        "protein_percent": 25.0
+      },
+      {
+        "name": "High-Protein Supplement",
+        "protein_percent": 75.0
+      },
+      {
+        "name": "Biofilm Powder",
+        "protein_percent": 20.0
+      }
+    ],
+    "maintenance_schedule": {
+      "Monday": "50% water change, Filter check",
+      "Tuesday": "Feed high-protein",
+      "Wednesday": "Biofilm powder",
+      "Thursday": "50% water change",
+      "Friday": "Sinking pellets, Substrate clean",
+      "Saturday": "Vegetable flakes",
+      "Sunday": "Water test, Complete parameter check"
+    }
+  },
+  "notes": "Professional aquarium with advanced care schedule. Supports 6 different shrimp with diverse dietary needs."
+}
+
+###
+
+### ============================================================
+### 17. Name Shrimp - Maximum Extra Names
+### ============================================================
+
+POST http://127.0.0.1:8000/api/tools/name_shrimp
+Content-Type: application/json
+
+{
+  "tank": {
+    "tank_name": "Extended Names Tank",
+    "capacity": 40,
+    "shrimp_list": [
+      {
+        "name": "Shrimp1",
+        "species": "Neocaridina davidi",
+        "age_months": 6
+      }
+    ]
+  },
+  "extra_names": ["Name1", "Name2", "Name3", "Name4", "Name5", "Name6", "Name7", "Name8", "Name9", "Name10"]
+}
+
+###
+
+### ============================================================
+### NOTES
+### ============================================================
+###
+### Base URL: http://127.0.0.1:8000
+###
+### To run the Complex Inputs MCP Server:
+###   python src/complex_inputs.py
+###
+### The server will start on http://127.0.0.1:8000
+###
+### All requests use POST for complex data submission
+### and GET for simple retrieval operations.
+###
+### Pydantic Validation Constraints:
+### - Shrimp name: max 10 characters
+### - Shrimp age: 0-360 months
+### - Tank capacity: minimum 1 liter
+### - Protein percent: 0-100%
+### - Extra names: max 10 items
+###
+### Key Features Tested:
+### 1. Complex nested models (Tank > Shrimp list)
+### 2. Field validation (constraints, lengths)
+### 3. Multiple species handling
+### 4. List operations on complex objects
+### 5. Dictionary field validation (maintenance_schedule)
+### 6. Optional fields (notes)
+### 7. Case-insensitive string matching
+### 8. Edge cases (old shrimp, high density)
+###
+
