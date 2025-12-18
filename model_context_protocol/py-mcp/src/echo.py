@@ -74,21 +74,48 @@ class PromptRequest(BaseModel):
 @app.get("/api/info")
 async def get_info():
     """Get server information and health status"""
-    return {
-        "name": "Echo MCP Server",
-        "version": "1.0.0",
-        "status": "running",
-        "tools": list(mcp.list_tools().tools) if hasattr(mcp, 'list_tools') else [],
-        "resources": list(mcp.list_resource_templates().resources) if hasattr(mcp, 'list_resource_templates') else [],
-        "prompts": list(mcp.list_prompts().prompts) if hasattr(mcp, 'list_prompts') else [],
-    }
+    try:
+        # Await the async methods to get the responses
+        tools_response = await mcp.list_tools() if hasattr(mcp, 'list_tools') else None
+        resources_response = await mcp.list_resource_templates() if hasattr(mcp, 'list_resource_templates') else None
+        prompts_response = await mcp.list_prompts() if hasattr(mcp, 'list_prompts') else None
+
+        return {
+            "name": "Echo MCP Server",
+            "version": "1.0.0",
+            "status": "running",
+            "tools": [
+                {"name": t.name, "description": t.description}
+                for t in (tools_response.tools if tools_response else [])
+            ],
+            "resources": [
+                {"uri": r.uriTemplate}
+                for r in (resources_response.resources if resources_response else [])
+            ],
+            "prompts": [
+                {"name": p.name}
+                for p in (prompts_response.prompts if prompts_response else [])
+            ],
+        }
+    except Exception as e:
+        logger.error(f"Error getting server info: {e}")
+        return {
+            "name": "Echo MCP Server",
+            "version": "1.0.0",
+            "status": "error",
+            "error": str(e),
+            "tools": [],
+            "resources": [],
+            "prompts": [],
+        }
 
 
 @app.get("/api/tools")
 async def list_tools():
     """List all available tools"""
     try:
-        tools_response = mcp.list_tools()
+        # Await the async method
+        tools_response = await mcp.list_tools()
         return {
             "tools": [
                 {
@@ -128,7 +155,8 @@ async def call_tool(tool_name: str, request: ToolRequest):
 async def list_resources():
     """List all available resources"""
     try:
-        resources_response = mcp.list_resource_templates()
+        # Await the async method
+        resources_response = await mcp.list_resource_templates()
         return {
             "resources": [
                 {
@@ -172,7 +200,8 @@ async def get_resource(resource_path: str):
 async def list_prompts():
     """List all available prompts"""
     try:
-        prompts_response = mcp.list_prompts()
+        # Await the async method
+        prompts_response = await mcp.list_prompts()
         return {
             "prompts": [
                 {
@@ -229,3 +258,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Echo MCP server stopped by user (CTRL+C)")
         exit(0)
+

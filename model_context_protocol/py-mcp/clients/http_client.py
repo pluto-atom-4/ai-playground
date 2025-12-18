@@ -2,22 +2,29 @@
 """
 HTTP Client for inspecting MCP Echo Server behavior
 
-This script provides a simple HTTP client interface to interact with the MCP Echo Server
-and inspect its responses. It demonstrates various tool usage patterns and validates responses.
+This script provides an HTTP client interface to interact with the MCP Echo Server
+running on http://127.0.0.1:8000 and inspect its responses. It supports both
+requests and httpx libraries for making HTTP calls.
 
 Usage:
-    python clients/http_client.py --server-type demo
     python clients/http_client.py --server-type echo
-    python clients/http_client.py --tool echo_string --message "Hello World"
-    python clients/http_client.py --tool add_numbers --args 5 3
+    python clients/http_client.py --tool echo --message "Hello World"
+    python clients/http_client.py --list-tools
+    python clients/http_client.py --info
+    python clients/http_client.py --client httpx --tool echo --message "Test"
 """
 
 import json
 import sys
 import argparse
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pathlib import Path
+import time
+
+# Third-party HTTP libraries
+import requests
+import httpx
 
 # Fix encoding for Windows
 if sys.platform == "win32":
@@ -26,194 +33,293 @@ if sys.platform == "win32":
 
 
 class MCPEchoServerClient:
-    """Client for interacting with MCP Echo Server via tool invocation"""
+    """Client for interacting with MCP Echo Server via HTTP API"""
 
-    def __init__(self, server_type: str = "demo"):
+    # Default server configuration
+    DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+    DEFAULT_TIMEOUT = 10.0
+
+    def __init__(
+        self,
+        server_type: str = "echo",
+        base_url: str = DEFAULT_BASE_URL,
+        timeout: float = DEFAULT_TIMEOUT,
+        client_type: str = "requests",
+    ):
         """
         Initialize the MCP Echo Server Client
 
         Args:
-            server_type: Type of server ('demo' or 'echo')
+            server_type: Type of server ('echo' or 'demo')
+            base_url: Base URL of the server
+            timeout: Request timeout in seconds
+            client_type: HTTP client library to use ('requests' or 'httpx')
         """
         self.server_type = server_type
-        self.tools = self._get_available_tools()
+        self.base_url = base_url
+        self.timeout = timeout
+        self.client_type = client_type
+        self._validate_client_type()
 
-    def _get_available_tools(self) -> Dict[str, Dict[str, Any]]:
-        """Get available tools for the server type"""
-        demo_tools = {
-            "echo_string": {
-                "description": "Echo a string back to the caller",
-                "args": ["message"],
-                "example": ["Hello, World!"],
-            },
-            "add_numbers": {
-                "description": "Add two numbers together",
-                "args": ["a", "b"],
-                "example": [5, 3],
-            },
-            "get_string_length": {
-                "description": "Get the length of a string",
-                "args": ["input"],
-                "example": ["hello"],
-            },
-        }
+    def _validate_client_type(self):
+        """Validate that client_type is supported"""
+        if self.client_type not in ["requests", "httpx"]:
+            raise ValueError(f"Unsupported client_type: {self.client_type}")
 
-        echo_tools = {
-            "echo": {
-                "description": "Echo a string back to the caller",
-                "args": ["message"],
-                "example": ["Hello, World!"],
-            },
-        }
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Make an HTTP request to the server
 
-        return demo_tools if self.server_type == "demo" else echo_tools
+        Args:
+            method: HTTP method ('GET' or 'POST')
+            endpoint: API endpoint path
+            data: Request data (for POST requests)
+            timeout: Request timeout
 
-    def echo_string(self, message: str) -> Dict[str, Any]:
-        """Echo a string (Demo Server)"""
-        print(f"📤 Calling: echo_string")
-        print(f"   Message: {message}")
+        Returns:
+            Response data as dictionary
+        """
+        if timeout is None:
+            timeout = self.timeout
+
+        url = f"{self.base_url}{endpoint}"
+
+        try:
+            if self.client_type == "requests":
+                return self._make_request_with_requests(method, url, data, timeout)
+            else:
+                return self._make_request_with_httpx(method, url, data, timeout)
+        except Exception as e:
+            return {
+                "error": str(e),
+                "message": f"Failed to connect to server at {self.base_url}",
+                "isError": True,
+            }
+
+    def _make_request_with_requests(
+        self,
+        method: str,
+        url: str,
+        data: Optional[Dict[str, Any]],
+        timeout: float,
+    ) -> Dict[str, Any]:
+        """Make request using requests library"""
+        print(f"  🔌 Using: requests library")
+        headers = {"Content-Type": "application/json"}
+
+        if method.upper() == "GET":
+            response = requests.get(url, headers=headers, timeout=timeout)
+        else:
+            response = requests.post(url, json=data, headers=headers, timeout=timeout)
+
+        response.raise_for_status()
+        return response.json()
+
+    def _make_request_with_httpx(
+        self,
+        method: str,
+        url: str,
+        data: Optional[Dict[str, Any]],
+        timeout: float,
+    ) -> Dict[str, Any]:
+        """Make request using httpx library"""
+        print(f"  🔌 Using: httpx library")
+        headers = {"Content-Type": "application/json"}
+
+        with httpx.Client(timeout=timeout) as client:
+            if method.upper() == "GET":
+                response = client.get(url, headers=headers)
+            else:
+                response = client.post(url, json=data, headers=headers)
+
+            response.raise_for_status()
+            return response.json()
+
+    def get_server_info(self) -> Dict[str, Any]:
+        """Get server information and health status"""
+        print(f"📡 Fetching server info from {self.base_url}/api/info")
         print()
-        return {
-            "tool": "echo_string",
-            "args": {"message": message},
-            "description": "Echo a string back to the caller",
-        }
+        return self._make_request("GET", "/api/info")
 
-    def add_numbers(self, a: float, b: float) -> Dict[str, Any]:
-        """Add two numbers (Demo Server)"""
-        print(f"📤 Calling: add_numbers")
-        print(f"   a: {a}")
-        print(f"   b: {b}")
+    def list_tools(self) -> Dict[str, Any]:
+        """List all available tools on the server"""
+        print(f"📡 Fetching available tools from {self.base_url}/api/tools")
         print()
-        return {
-            "tool": "add_numbers",
-            "args": {"a": a, "b": b},
-            "description": "Add two numbers together",
-        }
+        return self._make_request("GET", "/api/tools")
 
-    def get_string_length(self, input_str: str) -> Dict[str, Any]:
-        """Get string length (Demo Server)"""
-        print(f"📤 Calling: get_string_length")
-        print(f"   Input: {input_str}")
+    def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Call a tool on the server
+
+        Args:
+            tool_name: Name of the tool to call
+            arguments: Arguments to pass to the tool
+
+        Returns:
+            Tool response
+        """
+        print(f"📤 Calling tool: {tool_name}")
+        print(f"   Arguments: {json.dumps(arguments, ensure_ascii=False)}")
         print()
-        return {
-            "tool": "get_string_length",
-            "args": {"input": input_str},
-            "description": "Get the length of a string",
-        }
+
+        payload = {"arguments": arguments}
+        return self._make_request("POST", f"/api/tools/{tool_name}", payload)
 
     def echo(self, message: str) -> Dict[str, Any]:
-        """Echo a string (Echo Server)"""
-        print(f"📤 Calling: echo")
-        print(f"   Message: {message}")
-        print()
-        return {
-            "tool": "echo",
-            "args": {"message": message},
-            "description": "Echo a string back to the caller",
-        }
+        """Call the echo tool"""
+        return self.call_tool("echo", {"message": message})
 
-    def list_tools(self):
-        """List all available tools for the server"""
-        print(f"🔧 Available tools for {self.server_type} server:")
+    def list_resources(self) -> Dict[str, Any]:
+        """List all available resources on the server"""
+        print(f"📡 Fetching available resources from {self.base_url}/api/resources")
         print()
-        for tool_name, tool_info in self.tools.items():
-            print(f"  ▪ {tool_name}")
-            print(f"    Description: {tool_info['description']}")
-            print(f"    Arguments: {', '.join(tool_info['args'])}")
-            print(f"    Example: {tool_name}({', '.join(repr(arg) for arg in tool_info['example'])})")
-            print()
+        return self._make_request("GET", "/api/resources")
+
+    def get_resource(self, resource_path: str) -> Dict[str, Any]:
+        """
+        Get a resource from the server
+
+        Args:
+            resource_path: Path to the resource
+
+        Returns:
+            Resource data
+        """
+        print(f"📤 Getting resource: {resource_path}")
+        print()
+        return self._make_request("GET", f"/api/resources/{resource_path}")
+
+    def list_prompts(self) -> Dict[str, Any]:
+        """List all available prompts on the server"""
+        print(f"📡 Fetching available prompts from {self.base_url}/api/prompts")
+        print()
+        return self._make_request("GET", "/api/prompts")
+
+    def call_prompt(self, prompt_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Call a prompt on the server
+
+        Args:
+            prompt_name: Name of the prompt to call
+            arguments: Arguments to pass to the prompt
+
+        Returns:
+            Prompt response
+        """
+        print(f"📤 Calling prompt: {prompt_name}")
+        print(f"   Arguments: {json.dumps(arguments, ensure_ascii=False)}")
+        print()
+
+        payload = {"arguments": arguments}
+        return self._make_request("POST", f"/api/prompts/{prompt_name}", payload)
 
     def run_test_scenario(self, scenario: str = "basic"):
         """Run predefined test scenarios"""
         print(f"🧪 Running test scenario: {scenario}")
+        print(f"📍 Server: {self.base_url}")
+        print(f"🔌 Client: {self.client_type}")
         print("=" * 60)
         print()
 
-        if self.server_type == "demo" and scenario == "basic":
-            self._test_demo_basic()
-        elif self.server_type == "demo" and scenario == "comprehensive":
-            self._test_demo_comprehensive()
-        elif self.server_type == "echo" and scenario == "basic":
-            self._test_echo_basic()
+        if scenario == "basic":
+            self._test_basic()
+        elif scenario == "comprehensive":
+            self._test_comprehensive()
         else:
             print(f"❌ Unknown scenario: {scenario}")
 
-    def _test_demo_basic(self):
-        """Basic test scenario for demo server"""
-        print("Test 1: Echo String")
+    def _test_basic(self):
+        """Basic test scenario"""
+        print("Test 1: Server Info")
         print("-" * 40)
-        result = self.echo_string("Hello, MCP!")
+        result = self.get_server_info()
         self._print_result(result)
 
-        print("\nTest 2: Add Numbers")
+        print("\nTest 2: List Tools")
         print("-" * 40)
-        result = self.add_numbers(5, 3)
+        result = self.list_tools()
         self._print_result(result)
 
-        print("\nTest 3: String Length")
+        print("\nTest 3: Call Echo Tool")
         print("-" * 40)
-        result = self.get_string_length("MCP Echo Server")
+        result = self.echo("Hello from HTTP Client!")
         self._print_result(result)
 
-    def _test_demo_comprehensive(self):
-        """Comprehensive test scenario for demo server"""
-        print("Test 1: Echo with Empty String")
+    def _test_comprehensive(self):
+        """Comprehensive test scenario"""
+        print("Test 1: Server Info")
         print("-" * 40)
-        result = self.echo_string("")
+        result = self.get_server_info()
         self._print_result(result)
 
-        print("\nTest 2: Echo with Special Characters")
+        print("\nTest 2: List Tools")
         print("-" * 40)
-        result = self.echo_string("Hello\nWorld\t123!")
+        result = self.list_tools()
         self._print_result(result)
 
-        print("\nTest 3: Add Positive Numbers")
-        print("-" * 40)
-        result = self.add_numbers(10, 5)
-        self._print_result(result)
-
-        print("\nTest 4: Add Negative Numbers")
-        print("-" * 40)
-        result = self.add_numbers(-5, -3)
-        self._print_result(result)
-
-        print("\nTest 5: Add Floats")
-        print("-" * 40)
-        result = self.add_numbers(3.5, 2.5)
-        self._print_result(result)
-
-        print("\nTest 6: String Length with Unicode")
-        print("-" * 40)
-        result = self.get_string_length("你好世界")
-        self._print_result(result)
-
-        print("\nTest 7: String Length with Long String")
-        print("-" * 40)
-        result = self.get_string_length("a" * 1000)
-        self._print_result(result)
-
-    def _test_echo_basic(self):
-        """Basic test scenario for echo server"""
-        print("Test 1: Echo String")
+        print("\nTest 3: Echo - Simple Message")
         print("-" * 40)
         result = self.echo("Hello, Echo Server!")
         self._print_result(result)
 
-        print("\nTest 2: Echo with Special Characters")
+        print("\nTest 4: Echo - Special Characters")
         print("-" * 40)
         result = self.echo("Special: @#$%^&*()")
         self._print_result(result)
 
-        print("\nTest 3: Echo with Unicode")
+        print("\nTest 5: Echo - Unicode")
         print("-" * 40)
         result = self.echo("Unicode: 你好🎉")
+        self._print_result(result)
+
+        print("\nTest 6: Echo - Empty String")
+        print("-" * 40)
+        result = self.echo("")
+        self._print_result(result)
+
+        print("\nTest 7: Echo - Long Message")
+        print("-" * 40)
+        result = self.echo("x" * 500)
+        self._print_result(result)
+
+        print("\nTest 8: List Resources")
+        print("-" * 40)
+        result = self.list_resources()
+        self._print_result(result)
+
+        print("\nTest 9: Get Static Resource")
+        print("-" * 40)
+        result = self.get_resource("echo/static")
+        self._print_result(result)
+
+        print("\nTest 10: Get Template Resource")
+        print("-" * 40)
+        result = self.get_resource("echo/test_message")
+        self._print_result(result)
+
+        print("\nTest 11: List Prompts")
+        print("-" * 40)
+        result = self.list_prompts()
+        self._print_result(result)
+
+        print("\nTest 12: Call Prompt")
+        print("-" * 40)
+        result = self.call_prompt("Echo", {"text": "Hello from Prompt!"})
         self._print_result(result)
 
     def _print_result(self, result: Dict[str, Any]):
         """Pretty print the result"""
         print("📥 Response:")
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if isinstance(result, dict) and "error" in result:
+            print(f"❌ {result.get('message', result.get('error'))}")
+        else:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
         print()
 
     def generate_curl_examples(self):
@@ -222,30 +328,31 @@ class MCPEchoServerClient:
         print("=" * 60)
         print()
 
-        if self.server_type == "demo":
-            print("# Echo String Tool")
-            print('curl -X POST http://localhost:5000/tools/echo_string \\')
-            print('  -H "Content-Type: application/json" \\')
-            print('  -d \'{"message": "Hello, World!"}\' | jq')
-            print()
+        print("# Server Info")
+        print(f"curl -X GET {self.base_url}/api/info | jq")
+        print()
 
-            print("# Add Numbers Tool")
-            print('curl -X POST http://localhost:5000/tools/add_numbers \\')
-            print('  -H "Content-Type: application/json" \\')
-            print('  -d \'{"a": 5, "b": 3}\' | jq')
-            print()
+        print("# List Tools")
+        print(f"curl -X GET {self.base_url}/api/tools | jq")
+        print()
 
-            print("# Get String Length Tool")
-            print('curl -X POST http://localhost:5000/tools/get_string_length \\')
-            print('  -H "Content-Type: application/json" \\')
-            print('  -d \'{"input": "hello"}\' | jq')
-            print()
-        else:
-            print("# Echo Tool")
-            print('curl -X POST http://localhost:5000/tools/echo \\')
-            print('  -H "Content-Type: application/json" \\')
-            print('  -d \'{"message": "Hello, Echo Server!"}\' | jq')
-            print()
+        print("# Call Echo Tool")
+        print(f'curl -X POST {self.base_url}/api/tools/echo \\')
+        print('  -H "Content-Type: application/json" \\')
+        print('  -d \'{"arguments": {"message": "Hello, World!"}}\'')
+        print()
+
+        print("# List Resources")
+        print(f"curl -X GET {self.base_url}/api/resources | jq")
+        print()
+
+        print("# Get Static Resource")
+        print(f"curl -X GET {self.base_url}/api/resources/echo/static | jq")
+        print()
+
+        print("# List Prompts")
+        print(f"curl -X GET {self.base_url}/api/prompts | jq")
+        print()
 
 
 def main():
@@ -255,26 +362,60 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python clients/http_client.py --server-type demo
-  python clients/http_client.py --server-type echo
+  python clients/http_client.py --info
   python clients/http_client.py --list-tools
+  python clients/http_client.py --list-resources
+  python clients/http_client.py --list-prompts
+  python clients/http_client.py --tool echo --message "Hello World"
+  python clients/http_client.py --client httpx --tool echo --message "Test"
   python clients/http_client.py --scenario comprehensive
-  python clients/http_client.py --tool echo_string --message "Hello World"
-  python clients/http_client.py --tool add_numbers --args 5 3
+  python clients/http_client.py --scenario comprehensive --client httpx
+  python clients/http_client.py --curl-examples
         """,
     )
 
     parser.add_argument(
-        "--server-type",
-        choices=["demo", "echo"],
-        default="demo",
-        help="Type of server to connect to (default: demo)",
+        "--server-url",
+        default=MCPEchoServerClient.DEFAULT_BASE_URL,
+        help=f"Base URL of the MCP server (default: {MCPEchoServerClient.DEFAULT_BASE_URL})",
+    )
+
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=MCPEchoServerClient.DEFAULT_TIMEOUT,
+        help=f"Request timeout in seconds (default: {MCPEchoServerClient.DEFAULT_TIMEOUT})",
+    )
+
+    parser.add_argument(
+        "--client",
+        choices=["requests", "httpx"],
+        default="requests",
+        help="HTTP client library to use (default: requests)",
+    )
+
+    parser.add_argument(
+        "--info",
+        action="store_true",
+        help="Get server information and health status",
     )
 
     parser.add_argument(
         "--list-tools",
         action="store_true",
-        help="List all available tools for the server",
+        help="List all available tools on the server",
+    )
+
+    parser.add_argument(
+        "--list-resources",
+        action="store_true",
+        help="List all available resources on the server",
+    )
+
+    parser.add_argument(
+        "--list-prompts",
+        action="store_true",
+        help="List all available prompts on the server",
     )
 
     parser.add_argument(
@@ -286,19 +427,27 @@ Examples:
 
     parser.add_argument(
         "--tool",
-        help="Specific tool to test",
+        help="Specific tool to call",
     )
 
     parser.add_argument(
         "--message",
-        help="Message for echo tools",
+        help="Message for echo tool",
     )
 
     parser.add_argument(
-        "--args",
-        nargs="+",
-        type=float,
-        help="Arguments for tools that take numeric input",
+        "--resource",
+        help="Resource path to retrieve",
+    )
+
+    parser.add_argument(
+        "--prompt",
+        help="Prompt name to call",
+    )
+
+    parser.add_argument(
+        "--prompt-text",
+        help="Text argument for prompt",
     )
 
     parser.add_argument(
@@ -310,36 +459,50 @@ Examples:
     args = parser.parse_args()
 
     # Create client
-    client = MCPEchoServerClient(server_type=args.server_type)
+    client = MCPEchoServerClient(
+        server_type="echo",
+        base_url=args.server_url,
+        timeout=args.timeout,
+        client_type=args.client,
+    )
 
     # Handle different commands
-    if args.list_tools:
-        client.list_tools()
-    elif args.curl_examples:
+    if args.curl_examples:
         client.generate_curl_examples()
+    elif args.info:
+        result = client.get_server_info()
+        client._print_result(result)
+    elif args.list_tools:
+        result = client.list_tools()
+        client._print_result(result)
+    elif args.list_resources:
+        result = client.list_resources()
+        client._print_result(result)
+    elif args.list_prompts:
+        result = client.list_prompts()
+        client._print_result(result)
     elif args.tool:
-        # Run specific tool
-        if args.tool == "echo_string" or args.tool == "echo":
+        # Call specific tool
+        if args.tool == "echo":
             if args.message is None:
-                print("❌ Error: --message is required for echo tools")
+                print("❌ Error: --message is required for echo tool")
                 sys.exit(1)
-            if args.tool == "echo_string":
-                client.echo_string(args.message)
-            else:
-                client.echo(args.message)
-        elif args.tool == "add_numbers":
-            if args.args is None or len(args.args) != 2:
-                print("❌ Error: --args requires exactly 2 numbers")
-                sys.exit(1)
-            client.add_numbers(args.args[0], args.args[1])
-        elif args.tool == "get_string_length":
-            if args.message is None:
-                print("❌ Error: --message is required")
-                sys.exit(1)
-            client.get_string_length(args.message)
+            result = client.echo(args.message)
+            client._print_result(result)
         else:
             print(f"❌ Error: Unknown tool: {args.tool}")
             sys.exit(1)
+    elif args.resource:
+        # Get specific resource
+        result = client.get_resource(args.resource)
+        client._print_result(result)
+    elif args.prompt:
+        # Call specific prompt
+        prompt_args = {}
+        if args.prompt_text:
+            prompt_args["text"] = args.prompt_text
+        result = client.call_prompt(args.prompt, prompt_args)
+        client._print_result(result)
     else:
         # Run scenario
         client.run_test_scenario(scenario=args.scenario)
