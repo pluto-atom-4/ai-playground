@@ -85,3 +85,47 @@ Path conversion: C:\ → /c/
 6. **Git Bash always** - Use `bash.exe` for all terminal operations
 7. **Keep root clean** - Generated content → `generated/docs-copilot/`
 
+---
+
+## MCP Server Implementation Guidelines
+
+To implement an MCP server with modern Python best practices, follow these requirements:
+
+### Core Technologies
+- **Python**: Use Python 3.8+
+- **FastAPI**: For RESTful API endpoints
+- **Pydantic**: For complex model validation
+- **Uvicorn**: For ASGI server
+- **dotenv**: For environment variable management
+- **logging**: Use Python's logging module
+- **FastMCP**: Integrate as needed for MCP tool support
+
+### Logging
+- Set logging level to `INFO`
+- Log all API errors and important events
+
+### Validation
+- Use complex Pydantic models for request/response validation
+
+### MCP Tool Integration
+- Use `@mcp.tool` decorator to define tool name and description
+
+### RESTful API Endpoints
+- Implement with FastAPI:
+  - `GET /` — Returns service version, description, and available endpoints
+  - `GET /health` — Health check endpoint
+  - `GET /api/tools` — Returns list of available tools with descriptions
+  - `POST /api/tools/{tool_name}` — Invokes the defined MCP tool
+
+### Uvicorn Server
+- Use Uvicorn to start the FastAPI app
+- Allow configuration of host, port, and log level
+- Ensure graceful shutdown on Ctrl+C
+
+### Error Handling
+- Log all API errors
+- Return user-friendly error messages in API responses
+
+### API Key Authentication
+- Require API key for REST API authentication
+- Validate API key on protected endpoints
