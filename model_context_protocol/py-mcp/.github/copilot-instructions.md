@@ -87,6 +87,458 @@ Path conversion: C:\ → /c/
 
 ---
 
+## Troubleshooting Guide
+
+### Common Issues & Solutions
+
+#### Issue: Test Failures with "import not found"
+**Cause**: Virtual environment not activated or dependencies not installed  
+**Solution**:
+```bash
+# Ensure dependencies are installed
+pip install -e .
+# Then run tests
+pytest
+```
+
+#### Issue: "TypeError: got an unexpected keyword argument 'scope'"
+**Cause**: Using fixture with positional argument instead of keyword argument  
+**Solution**:
+```python
+# ❌ Wrong - scope as positional argument
+@pytest.fixture(scope="session")
+def client():
+    return TestClient(app)
+
+# ✅ Correct - scope as keyword argument
+@pytest.fixture(scope="session")
+def client():
+    return TestClient(app)
+```
+
+#### Issue: API Key Authentication Failing in Tests
+**Cause**: TEST_API_KEY environment variable not set  
+**Solution**:
+```bash
+# Load test environment variables
+source .env.test
+# Or set directly
+export TEST_API_KEY="test-key-12345"
+# Then run tests
+pytest
+```
+
+#### Issue: FastMCP Inspector Shows "Connection refused"
+**Cause**: MCP server not running or wrong port  
+**Solution**:
+1. Start your MCP server: `python src/server.py`
+2. In another terminal, run: `mcp-inspector`
+3. Open http://localhost:5173 in browser
+4. Verify server is responding to protocol messages
+
+#### Issue: Pydantic Validation Errors with Valid Data
+**Cause**: Field type mismatch or missing required field  
+**Solution**:
+```bash
+# Check the actual error message
+# Run test with verbose output
+pytest -v -s
+
+# Check your Pydantic model
+# Print the schema to see requirements
+python -c "from your_module import YourModel; print(YourModel.schema())"
+```
+
+#### Issue: Unicode Characters Breaking in Responses
+**Cause**: Encoding mismatch between request/response  
+**Solution**:
+```python
+# Ensure UTF-8 encoding in FastAPI
+app = FastAPI(...)
+# Response models work with unicode automatically
+# Test with parametrized unicode inputs
+@pytest.mark.parametrize("text", ["Hello", "中文", "🎉"])
+def test_unicode(text):
+    # Your test here
+    pass
+```
+
+#### Issue: Tool Invocation Timeout or Hangs
+**Cause**: Tool has infinite loop or blocking I/O without timeout  
+**Solution**:
+```python
+# Add timeout to tool definition
+@server.tool(timeout=30)  # 30-second timeout
+def my_tool(param: str) -> str:
+    # Always include exit condition
+    # Use async for I/O operations
+    return result
+
+# Test with timeout
+def test_tool_timeout(client, auth_headers):
+    response = client.post(
+        "/api/tools/my-tool",
+        headers=auth_headers,
+        json={"param": "test"},
+        timeout=5  # 5-second test timeout
+    )
+```
+
+---
+
+## Environment Management
+
+### Environment Files
+
+#### Development Environment (.env)
+```
+# For local development - use safe defaults
+ENVIRONMENT=development
+LOG_LEVEL=DEBUG
+API_KEY=dev-key-only-for-local-testing
+DATABASE_URL=sqlite:///./test.db
+DEBUG=true
+ALLOW_CORS=true
+```
+
+#### Testing Environment (.env.test)
+```
+# For pytest runs - NEVER use real credentials
+ENVIRONMENT=testing
+TEST_API_KEY=test-key-12345
+LOG_LEVEL=INFO
+TESTING=true
+DEBUG=false
+DATABASE_URL=sqlite:///:memory:
+```
+
+#### Production Environment (.env.production)
+```
+# For production deployment - use secrets manager
+ENVIRONMENT=production
+LOG_LEVEL=WARNING
+API_KEY=${SECRETS_API_KEY}  # Injected from secrets manager
+DATABASE_URL=${SECRETS_DB_URL}
+DEBUG=false
+ALLOW_CORS=false
+```
+
+### Loading Environment Variables
+
+```python
+# In your main server file (src/server.py)
+import os
+from dotenv import load_dotenv
+import logging
+
+# Determine environment
+env = os.getenv("ENVIRONMENT", "development")
+
+# Load appropriate .env file
+if env == "testing":
+    load_dotenv(".env.test")
+elif env == "production":
+    load_dotenv(".env.production", override=False)
+else:
+    load_dotenv(".env")
+
+# Validate required variables
+REQUIRED_VARS = ["API_KEY", "LOG_LEVEL"]
+missing = [var for var in REQUIRED_VARS if not os.getenv(var)]
+if missing:
+    raise RuntimeError(f"Missing required environment variables: {missing}")
+
+logger = logging.getLogger(__name__)
+logger.info(f"Environment: {env}, Log Level: {os.getenv('LOG_LEVEL')}")
+```
+
+### Environment Variable Guidelines
+
+| Variable | Dev | Test | Prod | Notes |
+|----------|-----|------|------|-------|
+| `ENVIRONMENT` | development | testing | production | Controls behavior |
+| `LOG_LEVEL` | DEBUG | INFO | WARNING | Verbosity control |
+| `API_KEY` | test value | test-key-12345 | secrets mgr | Never hardcode |
+| `TESTING` | false | true | false | Skip expensive ops |
+| `DEBUG` | true | false | false | Debug mode |
+
+### Secrets Management Best Practices
+
+- ❌ **Never** commit `.env` files with real secrets
+- ❌ **Never** use production credentials in development
+- ❌ **Never** hardcode API keys in code
+- ✅ **Always** use environment variables for secrets
+- ✅ **Always** add `.env*` to `.gitignore`
+- ✅ **Always** use secrets manager (AWS Secrets, HashiCorp Vault) in production
+- ✅ **Always** rotate secrets regularly
+
+### Local Development Setup
+
+```bash
+# 1. Create .env from template
+cp .env.example .env
+
+# 2. Edit .env with your local settings
+nano .env
+
+# 3. Activate virtual environment
+source venv/bin/activate
+
+# 4. Install dependencies
+pip install -e .
+
+# 5. Run development server
+python -m src.server
+```
+
+---
+
+## Security Guidelines
+
+### API Key Management
+
+#### Secure Key Generation
+```bash
+# Generate a strong random key (32 bytes = 256 bits)
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Output example: 7X_kQ1pM8-vN2hL4jR6wS9tU3aB5cD7e9F0gH2i
+
+# Store in .env (never in code)
+echo "API_KEY=7X_kQ1pM8-vN2hL4jR6wS9tU3aB5cD7e9F0gH2i" >> .env
+```
+
+#### API Key Validation in FastAPI
+```python
+from fastapi import Header, HTTPException, status
+
+async def verify_api_key(x_api_key: str = Header(...)):
+    """Verify API key from request header"""
+    valid_key = os.getenv("API_KEY")
+    if not x_api_key or x_api_key != valid_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+        )
+    return x_api_key
+
+@app.post("/api/tools/{tool_name}")
+async def invoke_tool(
+    tool_name: str,
+    _: str = Depends(verify_api_key),
+):
+    # Protected endpoint
+    pass
+```
+
+### HTTPS/TLS Requirements
+
+- ✅ **Always** use HTTPS in production (never HTTP)
+- ✅ **Always** validate SSL certificates
+- ✅ **Always** use strong cipher suites
+- ✅ **Consider** HSTS headers (HTTP Strict Transport Security)
+- ✅ **Use** TLS 1.2 or higher
+
+### Input Validation & Sanitization
+
+- ✅ **Always** validate input types with Pydantic
+- ✅ **Always** check input length/size limits
+- ✅ **Always** sanitize string inputs (prevent injection)
+- ❌ **Never** use user input in system commands
+
+```python
+from pydantic import BaseModel, Field, validator
+
+class ToolInput(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    timeout: int = Field(default=30, ge=1, le=300)
+    
+    @validator('message')
+    def validate_message(cls, v):
+        # Prevent script injection
+        if '<script>' in v.lower() or '<?php' in v.lower():
+            raise ValueError('Scripts not allowed in message')
+        return v.strip()
+```
+
+### Error Handling & Information Disclosure
+
+- ✅ **Return** generic error messages to clients
+- ✅ **Log** detailed errors for debugging
+- ❌ **Never** expose stack traces to clients
+- ❌ **Never** reveal internal paths or database names
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc):
+    # Log detailed error for debugging
+    logger.error(f"Internal error: {exc}", exc_info=True)
+    # Return generic message to client
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
+```
+
+### Logging Best Practices
+
+- ✅ **Log** all authentication attempts (success and failure)
+- ✅ **Log** all tool invocations with execution time
+- ✅ **Monitor** for unusual patterns (rate limit spikes, repeated failures)
+- ❌ **Never** log sensitive data (API keys, passwords, tokens)
+
+```python
+# Good: Logs the action but not the secret
+logger.info(f"Tool invocation: {tool_name} by client")
+
+# Bad: Logs sensitive data - NEVER do this!
+logger.info(f"API Key: {api_key}")  # ❌ Security breach!
+```
+
+### Dependency Security
+
+- ✅ **Regularly** update dependencies: `pip list --outdated`
+- ✅ **Scan** for vulnerabilities: `pip-audit` or `safety check`
+- ✅ **Pin** versions in production: `pip freeze > requirements-lock.txt`
+- ✅ **Review** CHANGELOG before major updates
+
+```bash
+# Scan for known vulnerabilities
+pip install pip-audit
+pip-audit
+
+# Generate lock file for reproducible builds
+pip freeze > requirements-lock.txt
+```
+
+---
+
+## Performance Guidelines
+
+### Response Time Targets
+
+Define acceptable latency for each endpoint:
+
+| Endpoint | Target | Max Acceptable | Notes |
+|----------|--------|-----------------|-------|
+| GET / | < 10ms | 50ms | Service info |
+| GET /health | < 5ms | 20ms | Health check |
+| GET /api/tools | < 50ms | 100ms | Tool list (cached) |
+| POST /api/tools/{tool} | < 1s | 5s | Tool invocation |
+
+### Measuring Performance
+
+```python
+import time
+from fastapi import Request
+import logging
+
+logger = logging.getLogger(__name__)
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    
+    # Log slow requests
+    if process_time > 1.0:
+        logger.warning(
+            f"Slow request: {request.method} {request.url.path} "
+            f"took {process_time:.2f}s"
+        )
+    
+    return response
+```
+
+### Optimization Techniques
+
+#### 1. Response Caching
+```python
+from fastapi_cache2 import FastAPICache2
+
+# Cache tool list for 5 minutes
+@app.get("/api/tools", response_cache_ttl=300)
+async def list_tools():
+    return get_tools()
+```
+
+#### 2. Connection Pooling
+```python
+import aiohttp
+
+session = None
+
+@app.on_event("startup")
+async def startup():
+    global session
+    session = aiohttp.ClientSession()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await session.close()
+```
+
+#### 3. Async Operations
+```python
+import asyncio
+
+@app.post("/api/tools/fetch-data")
+async def fetch_data():
+    # Concurrent I/O operations
+    results = await asyncio.gather(
+        fetch_external_api_1(),
+        fetch_external_api_2(),
+    )
+    return results
+```
+
+### Load Testing
+
+```bash
+# Using Apache Bench (ab)
+ab -n 1000 -c 10 http://localhost:8000/api/tools
+
+# Using wrk (recommended)
+wrk -t4 -c100 -d30s http://localhost:8000/api/tools
+
+# Using locust (with test file)
+pip install locust
+locust -f locustfile.py -H http://localhost:8000
+```
+
+### Resource Limits
+
+Set reasonable limits to prevent abuse:
+
+```python
+from fastapi import FastAPI
+from starlette.middleware.base import BaseHTTPMiddleware
+import json
+
+# Maximum body size: 1MB
+MAX_BODY_SIZE = 1024 * 1024
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.headers.get("content-length"):
+            content_length = int(request.headers["content-length"])
+            if content_length > MAX_BODY_SIZE:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body too large"}
+                )
+        return await call_next(request)
+
+app.add_middleware(BodySizeLimitMiddleware)
+```
+
+---
+
 ## MCP Inspector Tool
 
 ### @modelcontextprotocol/inspector
