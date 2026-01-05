@@ -1,0 +1,23 @@
+{
+  "logging_and_progress": {
+    "command": "python",
+    "args": [
+      "-m",
+      "uvicorn",
+      "src.logging_and_progress:app",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8000",
+      "--log-level",
+      "info"
+    ],
+    "env": {
+      "PYTHONUNBUFFERED": "1"
+    },
+    "description": "FastMCP Echo Server with logging and progress updates",
+    "type": "stdio",
+    "alwaysAllow": []
+  }
+}
+
