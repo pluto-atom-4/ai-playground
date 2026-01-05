@@ -210,6 +210,324 @@ Implement the following endpoints using FastAPI:
 - **Shutdown**: Handle graceful shutdown on Ctrl+C (SIGINT)
 - **Example**: `uvicorn.run(app, host=HOST, port=PORT, log_level=LOG_LEVEL)`
 
+### Testing FastAPI MCP Server
+
+FastAPI MCP servers should be tested using both manual testing with REST clients and automated testing with pytest to ensure API endpoints work correctly, validation passes, and MCP tool integration functions properly.
+
+#### Manual Testing with TestClient
+
+Use `FastAPI.TestClient` to test API endpoints in a controlled environment:
+
+**Setup**:
+```python
+from fastapi.testclient import TestClient
+from your_mcp_server import app
+
+# Create test client for testing endpoints without running server
+client = TestClient(app)
+```
+
+**Testing Workflow**:
+- ✅ **Test Service Information**: Verify `GET /` returns service metadata with version, description, and endpoints
+- ✅ **Test Health Check**: Verify `GET /health` returns `{"status": "healthy"}`
+- ✅ **Test Tool Discovery**: Verify `GET /api/tools` returns list of available MCP tools with complete schemas
+- ✅ **Test Tool Invocation**: Verify `POST /api/tools/{tool_name}` executes tools with correct parameters
+- ✅ **Test API Key Authentication**: Verify endpoints validate API keys in `X-API-Key` header
+- ✅ **Test Parameter Passing**: Verify parameters passed via query strings and JSON bodies are correctly handled
+- ✅ **Test Special Characters**: Verify endpoints handle special characters and Unicode in inputs
+
+#### Automated Testing with pytest
+
+Write comprehensive automated tests for FastAPI MCP server endpoints using `pytest`:
+
+**Test Configuration** (`pyproject.toml` or `pytest.ini`):
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+log_cli = true
+log_cli_level = "INFO"
+```
+
+**Test Structure**:
+```python
+import pytest
+import os
+from fastapi.testclient import TestClient
+from your_mcp_server import app
+
+# Use environment variable for test API key
+TEST_API_KEY = os.getenv("TEST_API_KEY", "test-key-12345")
+
+@pytest.fixture(scope="session")
+def client():
+    """Create FastAPI TestClient for all tests"""
+    return TestClient(app)
+
+@pytest.fixture
+def valid_api_key():
+    """Provide valid API key for authenticated endpoints"""
+    return TEST_API_KEY
+
+@pytest.fixture
+def auth_headers(valid_api_key):
+    """Provide authorization headers for authenticated requests"""
+    return {"X-API-Key": valid_api_key}
+
+class TestServiceEndpoints:
+    """Test public service information endpoints"""
+
+    def test_service_info(self, client):
+        """Test GET / returns service metadata"""
+        response = client.get("/")
+        assert response.status_code == 200
+        data = response.json()
+        assert "version" in data
+        assert "description" in data
+        assert "endpoints" in data
+        assert isinstance(data["endpoints"], list)
+
+    def test_health_check(self, client):
+        """Test GET /health indicates server is running"""
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("status") == "healthy"
+
+class TestToolDiscovery:
+    """Test tool listing and schema discovery endpoints"""
+
+    def test_tool_list_success(self, client):
+        """Test GET /api/tools returns available MCP tools"""
+        response = client.get("/api/tools")
+        assert response.status_code == 200
+        tools = response.json()
+        assert isinstance(tools, list)
+        assert len(tools) > 0
+
+    def test_tool_schema_completeness(self, client):
+        """Test each tool has required schema fields"""
+        response = client.get("/api/tools")
+        tools = response.json()
+        
+        for tool in tools:
+            assert "name" in tool, f"Tool missing 'name' field"
+            assert "description" in tool, f"Tool missing 'description' field"
+            assert "inputSchema" in tool, f"Tool missing 'inputSchema' field"
+            assert isinstance(tool["inputSchema"], dict), f"inputSchema must be a dict"
+
+class TestToolInvocation:
+    """Test tool execution via POST endpoints"""
+
+    def test_tool_invocation_with_query_params(self, client, auth_headers):
+        """Test POST /api/tools/{tool_name} with query string parameters"""
+        response = client.post(
+            "/api/tools/echo",
+            headers=auth_headers,
+            params={"message": "Hello World"}
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result.get("echo") == "Hello World"
+
+    def test_tool_invocation_with_json_body(self, client, auth_headers):
+        """Test tool invocation with JSON request body"""
+        response = client.post(
+            "/api/tools/echo",
+            headers=auth_headers,
+            json={"message": "JSON Test"}
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result.get("echo") == "JSON Test"
+
+    def test_tool_invocation_with_unicode(self, client, auth_headers):
+        """Test tool correctly handles Unicode and special characters"""
+        test_inputs = [
+            "ASCII: abc123!@#",
+            "Unicode: 中文 日本語 한국어",
+            "Emoji: 🎉 🚀 ✨",
+            "Mixed: Hello 世界 !@# 🌟"
+        ]
+        
+        for test_msg in test_inputs:
+            response = client.post(
+                "/api/tools/echo",
+                headers=auth_headers,
+                params={"message": test_msg}
+            )
+            assert response.status_code == 200
+            assert response.json().get("echo") == test_msg
+
+    def test_tool_invocation_nonexistent(self, client, auth_headers):
+        """Test invoking nonexistent tool returns 404"""
+        response = client.post(
+            "/api/tools/nonexistent_tool",
+            headers=auth_headers,
+            params={"message": "test"}
+        )
+        assert response.status_code == 404
+
+class TestAuthentication:
+    """Test API key authentication and authorization"""
+
+    def test_missing_api_key_returns_unauthorized(self, client):
+        """Test protected endpoint without API key returns 401"""
+        response = client.post(
+            "/api/tools/echo",
+            params={"message": "test"}
+        )
+        assert response.status_code == 401
+        error_data = response.json()
+        assert "detail" in error_data
+
+    def test_invalid_api_key_returns_unauthorized(self, client):
+        """Test protected endpoint with invalid API key returns 401"""
+        response = client.post(
+            "/api/tools/echo",
+            headers={"X-API-Key": "invalid-key-xyz"},
+            params={"message": "test"}
+        )
+        assert response.status_code == 401
+
+    def test_valid_api_key_grants_access(self, client, auth_headers):
+        """Test protected endpoint with valid API key succeeds"""
+        response = client.post(
+            "/api/tools/echo",
+            headers=auth_headers,
+            params={"message": "authorized"}
+        )
+        assert response.status_code == 200
+
+class TestValidation:
+    """Test request validation and error handling"""
+
+    def test_missing_required_parameter(self, client, auth_headers):
+        """Test tool invocation without required parameter returns 422"""
+        response = client.post(
+            "/api/tools/echo",
+            headers=auth_headers
+        )
+        assert response.status_code == 422
+        error_data = response.json()
+        assert "detail" in error_data
+
+    def test_invalid_parameter_type_validation(self, client, auth_headers):
+        """Test Pydantic validates parameter types"""
+        # Assuming message parameter expects string
+        response = client.post(
+            "/api/tools/echo",
+            headers=auth_headers,
+            json={"message": 12345}  # Integer instead of string
+        )
+        # Either coerces to string (200) or returns validation error (422)
+        assert response.status_code in [200, 422]
+
+    def test_response_structure_compliance(self, client):
+        """Test responses follow declared Pydantic models"""
+        response = client.get("/api/tools")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Response should be list of tool objects
+        assert isinstance(data, list)
+        if len(data) > 0:
+            tool = data[0]
+            assert isinstance(tool, dict)
+
+class TestErrorHandling:
+    """Test error responses include user-friendly messages"""
+
+    def test_auth_error_message_format(self, client):
+        """Test authentication error has descriptive message"""
+        response = client.post(
+            "/api/tools/echo",
+            params={"message": "test"}
+        )
+        assert response.status_code == 401
+        error_data = response.json()
+        assert "detail" in error_data
+        error_msg = error_data["detail"]
+        assert len(error_msg) > 0
+        assert isinstance(error_msg, str)
+
+    def test_tool_error_user_friendly_message(self, client, auth_headers):
+        """Test tool execution errors return descriptive messages"""
+        # Invoke tool with edge case that triggers error
+        response = client.post(
+            "/api/tools/echo",
+            headers=auth_headers,
+            params={"message": ""}  # Empty string test
+        )
+        
+        if response.status_code >= 400:
+            error_data = response.json()
+            assert "detail" in error_data or "message" in error_data
+            error_text = error_data.get("detail") or error_data.get("message")
+            assert len(error_text) > 0
+```
+
+**Key Testing Points**:
+- ✅ Verify all RESTful endpoints (GET /, /health, /api/tools, POST /api/tools/{tool_name})
+- ✅ Test API key authentication on protected endpoints (missing, invalid, valid)
+- ✅ Validate Pydantic model validation for request/response data
+- ✅ Test parameter passing via query strings and JSON bodies
+- ✅ Test handling of Unicode, special characters, and emoji in inputs
+- ✅ Verify error responses include user-friendly, descriptive messages
+- ✅ Test appropriate HTTP status codes (200, 401, 404, 422)
+- ✅ Check logging output at INFO level via pytest logging capture
+- ✅ Test edge cases (missing parameters, invalid types, nonexistent tools, empty values)
+- ✅ Organize tests into logical classes by functionality (service, tools, auth, validation)
+
+**Test Environment Setup**:
+
+Create `.env.test` for test-specific configuration:
+```
+TEST_API_KEY=test-key-12345
+LOG_LEVEL=DEBUG
+```
+
+Configure pytest to load test environment:
+```python
+# In conftest.py
+import os
+from dotenv import load_dotenv
+
+def pytest_configure(config):
+    """Load test environment variables before running tests"""
+    load_dotenv(".env.test")
+```
+
+**Running Tests**:
+```bash
+# Run all tests
+pytest
+
+# Run with coverage report
+pytest --cov=src/ --cov-report=html
+
+# Run specific test class
+pytest tests/test_mcp_server.py::TestToolInvocation
+
+# Run specific test function
+pytest tests/test_mcp_server.py::TestToolInvocation::test_tool_invocation_with_query_params
+
+# Run with verbose output (shows all test names)
+pytest -v
+
+# Run with print statements visible
+pytest -s
+
+# Run with logging output
+pytest --log-cli-level=INFO
+
+# Run with coverage and stop on first failure
+pytest --cov=src/ -x
+```
+
 ---
 
 ## FastMCP Server
