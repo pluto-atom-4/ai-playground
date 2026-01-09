@@ -1,39 +1,71 @@
 """
-FastMCP Weather Example with Structured Output
+FastApiMCP Weather Server with Structured Output
 
-Demonstrates how to use structured output with tools to return
-well-typed, validated data that clients can easily process.
+Demonstrates FastApiMCP integration for REST API and MCP protocol support.
+Returns well-typed, validated data that clients can easily process.
+
+Features:
+  - Pydantic-based structured output validation
+  - FastAPI endpoints automatically exposed as MCP tools
+  - REST API endpoints for direct access
+  - HTTP/POST MCP protocol support via POST /mcp endpoint
+  - Comprehensive logging and error handling
 """
 
-import asyncio
-import json
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TypedDict
 
 from pydantic import BaseModel, Field
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status, Header
 import uvicorn
 
-from mcp.server.fastmcp import FastMCP
-from mcp.shared.memory import create_connected_server_and_client_session as client_session
+from fastapi_mcp import FastApiMCP
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
-logger = logging.getLogger("mcp.weather")
+logger = logging.getLogger("weather.mcp")
 
-# Create server
-mcp = FastMCP("Weather Service", json_response=True)
+# API Key authentication
+API_KEY = os.getenv("API_KEY", "test-key-12345")
 
+
+def verify_api_key(x_api_key: str = Header(...)) -> str:
+    """Verify API key from request header."""
+    if not x_api_key or x_api_key != API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+        )
+    return x_api_key
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Weather MCP Server",
+    version="1.0.0",
+    description="Weather service with structured output via MCP and REST API"
+)
+
+# Create FastApiMCP instance
+mcp = FastApiMCP(app, name="Weather Service")
+# Mount HTTP transport for MCP endpoints - enables POST /mcp endpoint
+mcp.mount_http()
+
+
+# ============================================================================
+# Data Models
+# ============================================================================
 
 # Example 1: Using a Pydantic model for structured output
 class WeatherData(BaseModel):
-    """Structured weather data response"""
+    """Structured weather data response."""
 
     temperature: float = Field(description="Temperature in Celsius")
     humidity: float = Field(description="Humidity percentage (0-100)")
@@ -43,9 +75,53 @@ class WeatherData(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now, description="Observation time")
 
 
-@mcp.tool()
-def get_weather(city: str) -> WeatherData:
-    """Get current weather for a city with full structured data"""
+# Example 2: Using TypedDict for a simpler structure
+class WeatherSummary(TypedDict):
+    """Simple weather summary."""
+
+    city: str
+    temp_c: float
+    description: str
+
+
+# Example 4: Using dataclass for weather alerts
+@dataclass
+class WeatherAlert:
+    """Weather alert information."""
+
+    severity: str  # "low", "medium", "high"
+    title: str
+    description: str
+    affected_areas: list[str]
+    valid_until: datetime
+
+
+# Example 6: Weather statistics with nested models
+class DailyStats(BaseModel):
+    """Statistics for a single day."""
+
+    high: float
+    low: float
+    mean: float
+
+
+class WeatherStats(BaseModel):
+    """Weather statistics over a period."""
+
+    location: str
+    period_days: int
+    temperature: DailyStats
+    humidity: DailyStats
+    precipitation_mm: float = Field(description="Total precipitation in millimeters")
+
+
+# ============================================================================
+# FastAPI Endpoints (automatically exposed as MCP tools)
+# ============================================================================
+
+@app.post("/weather", operation_id="get_weather", tags=["Weather"])
+async def get_weather(city: str) -> WeatherData:
+    """Get current weather for a city with full structured data."""
     logger.info(f"get_weather called for city: {city}")
     # In a real implementation, this would fetch from a weather API
     data = WeatherData(
@@ -55,39 +131,35 @@ def get_weather(city: str) -> WeatherData:
         wind_speed=12.3,
         location=city
     )
-    logger.info(f"Returning weather data for {city}: {data}")
+    logger.info(f"Returning weather data for {city}")
     return data
 
 
-# Example 2: Using TypedDict for a simpler structure
-class WeatherSummary(TypedDict):
-    """Simple weather summary"""
-
-    city: str
-    temp_c: float
-    description: str
-
-
-@mcp.tool()
-def get_weather_summary(city: str) -> WeatherSummary:
-    """Get a brief weather summary for a city"""
+@app.post("/weather-summary", operation_id="get_weather_summary", tags=["Weather"])
+async def get_weather_summary(city: str) -> WeatherSummary:
+    """Get a brief weather summary for a city."""
     logger.info(f"get_weather_summary called for city: {city}")
     summary = WeatherSummary(
         city=city,
         temp_c=22.5,
         description="Partly cloudy with light breeze"
     )
-    logger.info(f"Returning summary for {city}: {summary}")
+    logger.info(f"Returning summary for {city}")
     return summary
 
 
-# Example 3: Using dict[str, Any] for flexible schemas
-@mcp.tool()
-def get_weather_metrics(cities: list[str]) -> dict[str, dict[str, float]]:
-    """Get weather metrics for multiple cities
+@app.post("/weather-metrics", operation_id="get_weather_metrics", tags=["Weather"])
+async def get_weather_metrics(request_body: dict) -> dict[str, dict[str, float]]:
+    """Get weather metrics for multiple cities.
 
-    Returns a dictionary mapping city names to their metrics
+    Returns a dictionary mapping city names to their metrics.
+
+    Request body: {"cities": ["city1", "city2", ...]}
     """
+    cities = request_body.get("cities", [])
+    if not isinstance(cities, list):
+        cities = [cities] if cities else []
+
     logger.info(f"get_weather_metrics called for cities: {cities}")
     # Returns nested dictionaries with weather metrics
     metrics = {
@@ -98,43 +170,31 @@ def get_weather_metrics(cities: list[str]) -> dict[str, dict[str, float]]:
         }
         for i, city in enumerate(cities)
     }
-    logger.info(f"Returning metrics: {metrics}")
+    logger.info(f"Returning metrics for {len(cities)} cities")
     return metrics
 
 
-# Example 4: Using dataclass for weather alerts
-@dataclass
-class WeatherAlert:
-    """Weather alert information"""
-
-    severity: str  # "low", "medium", "high"
-    title: str
-    description: str
-    affected_areas: list[str]
-    valid_until: datetime
-
-
-@mcp.tool()
-def get_weather_alerts(region: str) -> list[WeatherAlert]:
-    """Get active weather alerts for a region"""
+@app.post("/weather-alerts", operation_id="get_weather_alerts", tags=["Weather"])
+async def get_weather_alerts(region: str) -> list[dict]:
+    """Get active weather alerts for a region."""
     logger.info(f"get_weather_alerts called for region: {region}")
     # In production, this would fetch real alerts
     if region.lower() == "california":
         alerts = [
-            WeatherAlert(
-                severity="high",
-                title="Heat Wave Warning",
-                description="Temperatures expected to exceed 40 degrees",
-                affected_areas=["Los Angeles", "San Diego", "Riverside"],
-                valid_until=datetime(2024, 7, 15, 18, 0),
-            ),
-            WeatherAlert(
-                severity="medium",
-                title="Air Quality Advisory",
-                description="Poor air quality due to wildfire smoke",
-                affected_areas=["San Francisco Bay Area"],
-                valid_until=datetime(2024, 7, 14, 12, 0),
-            ),
+            {
+                "severity": "high",
+                "title": "Heat Wave Warning",
+                "description": "Temperatures expected to exceed 40 degrees",
+                "affected_areas": ["Los Angeles", "San Diego", "Riverside"],
+                "valid_until": "2024-07-15T18:00:00",
+            },
+            {
+                "severity": "medium",
+                "title": "Air Quality Advisory",
+                "description": "Poor air quality due to wildfire smoke",
+                "affected_areas": ["San Francisco Bay Area"],
+                "valid_until": "2024-07-14T12:00:00",
+            },
         ]
         logger.info(f"Returning {len(alerts)} alerts for {region}")
         return alerts
@@ -142,13 +202,11 @@ def get_weather_alerts(region: str) -> list[WeatherAlert]:
     return []
 
 
-# Example 5: Returning primitives with structured output
-@mcp.tool()
-def get_temperature(city: str, unit: str = "celsius") -> float:
-    """Get just the temperature for a city
+@app.post("/temperature", operation_id="get_temperature", tags=["Weather"])
+async def get_temperature(city: str, unit: str = "celsius") -> dict:
+    """Get just the temperature for a city.
 
-    When returning primitives as structured output,
-    the result is wrapped in {"result": value}
+    Returns temperature in specified unit (celsius or fahrenheit).
     """
     logger.info(f"get_temperature called for city: {city}, unit: {unit}")
     base_temp = 22.5
@@ -157,31 +215,12 @@ def get_temperature(city: str, unit: str = "celsius") -> float:
     else:
         result = base_temp
     logger.info(f"Returning temperature: {result} {unit}")
-    return result
+    return {"temperature": result, "unit": unit, "city": city}
 
 
-# Example 6: Weather statistics with nested models
-class DailyStats(BaseModel):
-    """Statistics for a single day"""
-
-    high: float
-    low: float
-    mean: float
-
-
-class WeatherStats(BaseModel):
-    """Weather statistics over a period"""
-
-    location: str
-    period_days: int
-    temperature: DailyStats
-    humidity: DailyStats
-    precipitation_mm: float = Field(description="Total precipitation in millimeters")
-
-
-@mcp.tool()
-def get_weather_stats(city: str, days: int = 7) -> WeatherStats:
-    """Get weather statistics for the past N days"""
+@app.post("/weather-stats", operation_id="get_weather_stats", tags=["Weather"])
+async def get_weather_stats(city: str, days: int = 7) -> WeatherStats:
+    """Get weather statistics for the past N days."""
     logger.info(f"get_weather_stats called for city: {city}, days: {days}")
     stats = WeatherStats(
         location=city,
@@ -190,152 +229,56 @@ def get_weather_stats(city: str, days: int = 7) -> WeatherStats:
         humidity=DailyStats(high=85.0, low=45.0, mean=65.0),
         precipitation_mm=12.4,
     )
-    logger.info(f"Returning weather stats for {city}: {stats}")
+    logger.info(f"Returning weather stats for {city}")
     return stats
 
 
-# Create FastAPI app for HTTP API
-app = FastAPI(title="Weather MCP Server", version="1.0.0")
 
+# ============================================================================
+# Service Endpoints
+# ============================================================================
 
-@app.get("/")
+@app.get("/", tags=["Service"])
 async def get_info():
-    """Get server information and health status"""
+    """Get server information and available endpoints."""
     logger.info("GET / called")
-    try:
-        tools_response = await mcp.list_tools()
-        tools_list = tools_response.tools if hasattr(tools_response, 'tools') else (tools_response if isinstance(tools_response, list) else [])
-        return {
-            "name": "Weather MCP Server",
-            "version": "1.0.0",
-            "status": "running",
-            "endpoints": [
-                {"path": "/", "method": "GET", "description": "Server info"},
-                {"path": "/health", "method": "GET", "description": "Health check"},
-                {"path": "/api/tools", "method": "GET", "description": "List available tools"},
-            ],
-            "tools": [
-                {"name": t.name, "description": t.description}
-                for t in tools_list
-            ] if tools_list else [],
-        }
-    except Exception as e:
-        logger.error(f"Error in GET /: {e}")
-        return {"error": str(e), "status": "error"}
+    return {
+        "name": "Weather MCP Server",
+        "version": "1.0.0",
+        "status": "running",
+        "description": "Weather service with structured output via MCP and REST API",
+        "endpoints": [
+            {"path": "/", "method": "GET", "description": "Server information"},
+            {"path": "/health", "method": "GET", "description": "Health check"},
+            {"path": "/openapi.json", "method": "GET", "description": "OpenAPI schema"},
+            {"path": "/mcp", "method": "POST", "description": "MCP protocol endpoint"},
+        ],
+    }
 
 
-@app.get("/health")
+@app.get("/health", tags=["Service"])
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint."""
     logger.info("GET /health called")
     return {"status": "healthy", "service": "Weather MCP Server"}
 
 
-@app.get("/api/tools")
-async def list_tools():
-    """Get list of available tools"""
-    logger.info("GET /api/tools called")
-    try:
-        tools_response = await mcp.list_tools()
-        tools_list = tools_response.tools if hasattr(tools_response, 'tools') else (tools_response if isinstance(tools_response, list) else [])
-        return {
-            "tools": [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": t.inputSchema
-                }
-                for t in tools_list
-            ] if tools_list else []
-        }
-    except Exception as e:
-        logger.error(f"Error in GET /api/tools: {e}")
-        return {"error": str(e), "tools": []}
-
-
 if __name__ == "__main__":
+    # Parse command line arguments
+    host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
 
-    async def test() -> None:
-        """Test the tools by calling them through the server as a client would"""
-        print("Testing Weather Service Tools (via MCP protocol)\n")
-        print("=" * 80)
+    logger.info(f"Starting Weather MCP Server on {host}:{port}")
+    logger.info(f"API Key: {API_KEY}")
+    logger.info("Available endpoints:")
+    logger.info("  GET /                 - Server information")
+    logger.info("  GET /health           - Health check")
+    logger.info("  GET /api/tools        - List available tools")
+    logger.info("  POST /mcp             - MCP protocol endpoint")
 
-        async with client_session(mcp._mcp_server) as client:
-            # Test get_weather
-            result = await client.call_tool("get_weather", {"city": "London"})
-            print("\nWeather in London:")
-            print(json.dumps(result.structuredContent, indent=2))
-
-            # Test get_weather_summary
-            result = await client.call_tool("get_weather_summary", {"city": "Paris"})
-            print("\nWeather summary for Paris:")
-            print(json.dumps(result.structuredContent, indent=2))
-
-            # Test get_weather_metrics
-            result = await client.call_tool("get_weather_metrics", {"cities": ["Tokyo", "Sydney", "Mumbai"]})
-            print("\nWeather metrics:")
-            print(json.dumps(result.structuredContent, indent=2))
-
-            # Test get_weather_alerts
-            result = await client.call_tool("get_weather_alerts", {"region": "California"})
-            print("\nWeather alerts for California:")
-            print(json.dumps(result.structuredContent, indent=2))
-
-            # Test get_temperature
-            result = await client.call_tool("get_temperature", {"city": "Berlin", "unit": "fahrenheit"})
-            print("\nTemperature in Berlin:")
-            print(json.dumps(result.structuredContent, indent=2))
-
-            # Test get_weather_stats
-            result = await client.call_tool("get_weather_stats", {"city": "Seattle", "days": 30})
-            print("\nWeather stats for Seattle (30 days):")
-            print(json.dumps(result.structuredContent, indent=2))
-
-            # Also show the text content for comparison
-            print("\nText content for last result:")
-            for content in result.content:
-                if content.type == "text":
-                    print(content.text)
-
-    async def print_schemas() -> None:
-        """Print all tool schemas"""
-        print("Tool Schemas for Weather Service\n")
-        print("=" * 80)
-
-        tools_response = await mcp.list_tools()
-        tools = tools_response.tools if hasattr(tools_response, 'tools') else tools_response
-        for tool in tools:
-            print(f"\nTool: {tool.name}")
-            print(f"Description: {tool.description}")
-            print("Input Schema:")
-            print(json.dumps(tool.inputSchema, indent=2))
-
-            if tool.outputSchema:
-                print("Output Schema:")
-                print(json.dumps(tool.outputSchema, indent=2))
-            else:
-                print("Output Schema: None (returns unstructured content)")
-
-            print("-" * 80)
-
-    # Check command line arguments
-    if len(sys.argv) > 1 and sys.argv[1] == "--schemas":
-        asyncio.run(print_schemas())
-    elif len(sys.argv) > 1 and sys.argv[1] == "--http":
-        # Start HTTP API server
-        host = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
-        port = int(sys.argv[3]) if len(sys.argv) > 3 else 8000
-        logger.info(f"Starting Weather HTTP server on {host}:{port}")
-        try:
-            uvicorn.run(app, host=host, port=port, log_level="info")
-        except KeyboardInterrupt:
-            logger.info("Weather HTTP server stopped by user (CTRL+C)")
-            exit(0)
-    else:
-        print("Usage:")
-        print("  python weather_structured.py          # Run tool tests")
-        print("  python weather_structured.py --schemas # Print tool schemas")
-        print("  python weather_structured.py --http [host] [port] # Start HTTP API server")
-        print()
-        asyncio.run(test())
+    try:
+        uvicorn.run(app, host=host, port=port, log_level="info")
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user (CTRL+C)")
+        sys.exit(0)
 
