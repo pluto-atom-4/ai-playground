@@ -19,6 +19,8 @@ dependencies = [
     "pydantic>=2.0.0",
     "uvicorn>=0.40.0",
     "slowapi>=0.1.8",
+    "pillow>=12.1.0",
+    "pyautogui>=0.9.54",
 ]
 
 authors = [
