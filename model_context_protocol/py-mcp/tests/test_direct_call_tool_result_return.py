@@ -30,14 +30,14 @@ class TestEchoTool:
         assert result.content[0].type == "text"
         assert result.content[0].text == "Hello, World!"
 
-    def test_echo_structured_content(self):
+    def test_echo_structuredContent(self):
         """Test echo returns structured content with text."""
         text = "Test Message"
         result = echo(text)
 
-        assert result.structured_content is not None
-        assert "text" in result.structured_content
-        assert result.structured_content["text"] == text
+        assert result.structuredContent is not None
+        assert "original_text" in result.structuredContent
+        assert result.structuredContent["original_text"] == text
 
     def test_echo_metadata(self):
         """Test echo includes metadata in structured content."""
@@ -45,16 +45,16 @@ class TestEchoTool:
         result = echo(text)
 
         # Metadata is passed to CallToolResult but we verify through structured content
-        assert result.structured_content is not None
-        assert "text" in result.structured_content
-        assert result.structured_content["text"] == text
+        assert result.structuredContent is not None
+        assert "original_text" in result.structuredContent
+        assert result.structuredContent["original_text"] == text
 
     def test_echo_empty_string(self):
         """Test echoing an empty string."""
         result = echo("")
 
         assert result.content[0].text == ""
-        assert result.structured_content["text"] == ""
+        assert result.structuredContent["original_text"] == ""
 
     def test_echo_long_string(self):
         """Test echoing a long string."""
@@ -62,7 +62,7 @@ class TestEchoTool:
         result = echo(long_text)
 
         assert result.content[0].text == long_text
-        assert result.structured_content["text"] == long_text
+        assert result.structuredContent["original_text"] == long_text
 
     def test_echo_unicode_characters(self):
         """Test echoing strings with Unicode characters."""
@@ -77,7 +77,7 @@ class TestEchoTool:
         for text in unicode_texts:
             result = echo(text)
             assert result.content[0].text == text
-            assert result.structured_content["text"] == text
+            assert result.structuredContent["original_text"] == text
 
     def test_echo_special_characters(self):
         """Test echoing strings with special characters."""
@@ -93,7 +93,7 @@ class TestEchoTool:
         for text in special_texts:
             result = echo(text)
             assert result.content[0].text == text
-            assert result.structured_content["text"] == text
+            assert result.structuredContent["original_text"] == text
 
     def test_echo_none_raises_error(self):
         """Test that echoing None raises ValueError."""
@@ -124,7 +124,7 @@ class TestEchoTool:
 
         # Same text should produce same content
         assert result1.content[0].text == result2.content[0].text
-        assert result1.structured_content["text"] == result2.structured_content["text"]
+        assert result1.structuredContent["original_text"] == result2.structuredContent["original_text"]
 
     def test_echo_whitespace_preservation(self):
         """Test echo preserves whitespace correctly."""
@@ -140,14 +140,14 @@ class TestEchoTool:
         for text in texts:
             result = echo(text)
             assert result.content[0].text == text
-            assert result.structured_content["text"] == text
+            assert result.structuredContent["original_text"] == text
 
     def test_echo_single_character(self):
         """Test echo with single character."""
         result = echo("x")
 
         assert result.content[0].text == "x"
-        assert result.structured_content["text"] == "x"
+        assert result.structuredContent["original_text"] == "x"
 
 
 # ============================================================================
@@ -246,7 +246,7 @@ class TestEdgeCases:
         result = echo(text)
 
         assert result.content[0].text == text
-        assert result.structured_content["text"] == text
+        assert result.structuredContent["original_text"] == text
 
     def test_echo_repeated_calls_consistency(self):
         """Test echo returns consistent results for repeated calls."""
@@ -354,35 +354,35 @@ class TestCallToolResult:
         assert hasattr(result, 'content')
         assert isinstance(result.content, list)
 
-    def test_call_tool_result_has_structured_content(self):
-        """Test CallToolResult has structured_content attribute."""
+    def test_call_tool_result_has_structuredContent(self):
+        """Test CallToolResult has structuredContentattribute."""
         result = echo("test")
 
-        assert hasattr(result, 'structured_content')
-        assert isinstance(result.structured_content, dict)
+        assert hasattr(result, 'structuredContent')
+        assert isinstance(result.structuredContent, dict)
 
     def test_call_tool_result_has_metadata(self):
         """Test CallToolResult is created with metadata."""
         result = echo("test")
 
-        # CallToolResult is properly created and contains structured_content
-        assert hasattr(result, 'structured_content')
-        assert isinstance(result.structured_content, dict)
+        # CallToolResult is properly created and contains structuredContent
+        assert hasattr(result, 'structuredContent')
+        assert isinstance(result.structuredContent, dict)
 
     def test_call_tool_result_metadata_keys(self):
         """Test CallToolResult is created with structured content."""
         result = echo("test")
 
         # Verify structured content contains text
-        assert "text" in result.structured_content
-        assert result.structured_content["text"] == "test"
+        assert "original_text" in result.structuredContent
+        assert result.structuredContent["original_text"] == "test"
 
     def test_call_tool_result_text_content_match(self):
-        """Test content text matches structured_content text."""
+        """Test content text matches structuredContenttext."""
         text = "matching test"
         result = echo(text)
 
         content_text = result.content[0].text
-        structured_text = result.structured_content["text"]
+        structured_text = result.structuredContent["original_text"]
 
         assert content_text == structured_text == text

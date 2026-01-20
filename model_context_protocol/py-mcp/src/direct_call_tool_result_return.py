@@ -7,7 +7,6 @@ Follows FastMCP Server guidelines with proper logging, validation, and error han
 
 import asyncio
 import logging
-from typing import Annotated
 
 from pydantic import BaseModel, Field
 
@@ -34,7 +33,7 @@ class EchoResponse(BaseModel):
     name="echo",
     description="Echo the input text with structure and metadata"
 )
-def echo(text: str = Field(..., description="Text to echo")) -> Annotated[CallToolResult, EchoResponse]:
+def echo(text: str = Field(..., description="Text to echo")) -> CallToolResult:
     """
     Echo the input text and return structured response with metadata.
 
@@ -65,8 +64,12 @@ def echo(text: str = Field(..., description="Text to echo")) -> Annotated[CallTo
         # Return CallToolResult with content, structured content, and metadata
         result = CallToolResult(
             content=[TextContent(type="text", text=text)],
-            structured_content={"text": text},
-            meta=metadata
+            structuredContent={
+                "original_text": text,
+                "status": "success",
+                "length": len(text)
+            },
+            _meta={"some": "metadata"}
         )
         logger.info(f"echo tool returning CallToolResult")
         return result
