@@ -1,11 +1,11 @@
 ---
 name: implement-mcp-server
-description: Build high-quality MCP (Model Context Protocol) servers using FastMCP with Python. Use when creating MCP servers to integrate external APIs or services, implementing tools, resources, or prompts, setting up logging and error handling, or refactoring existing servers to follow modern best practices. Provides patterns for architecture, Pydantic validation, pagination, and deployment via stdio transport.
+description: Build high-quality MCP (Model Context Protocol) servers using FastMCP with Python. Use when creating MCP servers to integrate external APIs or services, implementing tools, resources, or prompts, setting up logging and error handling, or refactoring existing servers to follow modern best practices. Provides patterns for architecture, Pydantic validation, pagination, deployment via stdio transport, and comprehensive linting compliance.
 ---
 
 # MCP Server Implementation Skill
 
-This skill guides the implementation of Model Context Protocol (MCP) servers following modern Python best practices using FastMCP, focusing on code organization, logging, authentication, and transport handling.
+This skill guides the implementation of Model Context Protocol (MCP) servers following modern Python best practices using FastMCP, focusing on code organization, logging, authentication, transport handling, and production-ready code quality (linting, type hints, error handling).
 
 ## Quick Start
 
@@ -123,6 +123,11 @@ mcp-inspector "python -m src.servers.my_server --log-level DEBUG"
 - ✅ Use `sys.exit()` instead of `exit()` in entry points
 - ✅ Make all imports at the top of the file
 - ✅ Run mcp-inspector from the project root directory
+- ✅ **Pass ruff linting checks** before deployment
+- ✅ **Prefix unused function parameters with `_`** (e.g., `_ctx`, `_params`)
+- ✅ **Remove all trailing whitespace** from code and docstrings
+- ✅ **Use proper exception handling** with `exc_info=True` in error logs
+- ✅ **Include docstrings** for module, functions, and classes
 
 ### Don'ts
 - ❌ **Don't create `FastMCP` instance inside `main()`** (won't be discoverable)
@@ -136,6 +141,96 @@ mcp-inspector "python -m src.servers.my_server --log-level DEBUG"
 - ❌ Don't try to invoke with `#file:` syntax or file paths
 - ❌ Don't forget to include `__init__.py` in server directory
 - ❌ Don't run mcp-inspector from subdirectories (run from project root)
+- ❌ **Don't leave unused function parameters uncommented** (fails ARG001 check)
+- ❌ **Don't add whitespace to blank lines in docstrings** (fails W293 check)
+- ❌ **Don't use print() for logging** (use `logger` instead)
+
+## Code Quality & Linting Compliance
+
+### Production-Ready Standards
+
+All MCP servers in this project must pass **ruff linting checks** before being considered complete. This ensures consistency, maintainability, and adherence to Python standards.
+
+### Common Linting Issues & Fixes
+
+#### ARG001 - Unused Function Arguments
+**Issue:** Functions have parameters that aren't used in the function body.
+
+**Examples that fail:**
+```python
+# ❌ FAIL - ctx is not used
+async def handle_list_tools(ctx: ServerRequestContext, params: Any) -> Any:
+    return types.ListToolsResult(tools=[])
+```
+
+**Solution:** Prefix unused parameters with underscore:
+```python
+# ✅ PASS - Mark unused parameters with _
+async def handle_list_tools(_ctx: ServerRequestContext, _params: Any) -> Any:
+    return types.ListToolsResult(tools=[])
+```
+
+**When to use:**
+- MCP handlers that receive parameters required by the protocol but don't use all of them
+- Callback functions with fixed signatures
+- Compatibility with existing interfaces
+
+#### W293 - Trailing Whitespace in Blank Lines
+**Issue:** Blank lines in docstrings or code contain whitespace characters.
+
+**Examples that fail:**
+```python
+def main() -> int:
+    """Start the server.
+    
+    Line with trailing spaces: ␣␣␣
+    """
+```
+
+**Solution:** Remove all whitespace from blank lines:
+```python
+def main() -> int:
+    """Start the server.
+
+    No trailing spaces on blank line above.
+    """
+```
+
+### Required Verification Steps
+
+Before finalizing any MCP server implementation:
+
+```bash
+# 1. Run ruff linting check
+python -m ruff check src/servers/my_server/
+
+# 2. Run Python compilation check
+python -m py_compile src/servers/my_server/*.py
+
+# 3. Test with mcp-inspector
+mcp-inspector "python -m src.servers.my_server"
+```
+
+**All three checks must pass.**
+
+### Ruff Configuration
+
+The project uses ruff with the following rules enabled:
+- **E/W** - Error/Warning (PEP 8 violations)
+- **F** - Pyflakes (undefined names, unused imports)
+- **I** - isort (import sorting)
+- **C** - McCabe complexity
+- **B** - flake8-bugbear (likely bugs)
+- **UP** - pyupgrade (modernize syntax)
+- **ARG** - flake8-unused-arguments (unused parameters)
+- **SIM** - flake8-simplify (code simplification)
+- **LOG** - flake8-logging (logging best practices)
+
+**Exception handling:**
+- `E501` (line too long) - Ignored (handled by formatter)
+- `E741` (ambiguous names like `l`, `O`) - Ignored
+
+See `pyproject.toml` for full configuration.
 
 ## Reference Documentation
 
@@ -186,9 +281,11 @@ Then run with:
 mcp-inspector my-server
 ```
 
-## Real-World Example
+## Real-World Examples
 
-The `src/servers/simple_task/` in the reference project demonstrates correct implementation:
+### Example 1: FastMCP-based Server (Recommended)
+
+The `src/servers/simple_task/` in the reference project demonstrates correct FastMCP implementation:
 
 **Verification Results:**
 - ✅ FastMCP instance at module level and discoverable
@@ -197,6 +294,44 @@ The `src/servers/simple_task/` in the reference project demonstrates correct imp
 - ✅ Tools registered with async decorator
 - ✅ Module runnable with `python -m src.servers.simple_task`
 - ✅ Works with `mcp-inspector "python -m src.servers.simple_task"`
+- ✅ Passes all ruff linting checks
+- ✅ Comprehensive logging at all levels
+
+### Example 2: Low-Level Server API (Experimental Features)
+
+For servers that require experimental features (like task elicitation/sampling), the low-level `Server` API must be used:
+
+**Reference:** `src/servers/simple_task_interactive/`
+
+**When to use low-level API:**
+- Experimental task support (`server.experimental.enable_tasks()`)
+- HTTP streaming requirements
+- Custom request/response handling
+
+**Best practices for low-level servers:**
+- ✅ Still use structured logging with `logger`
+- ✅ Prefix unused handler parameters with `_`
+- ✅ Include proper docstrings and type hints
+- ✅ Implement error handling in nested task functions
+- ✅ Support dual-mode transport (stdio + HTTP) when appropriate
+- ✅ Pass all ruff linting checks
+- ✅ Create proper `__main__.py` entry point
+
+**Example pattern:**
+```python
+from mcp.server import Server, ServerRequestContext
+
+async def handle_list_tools(
+    _ctx: ServerRequestContext,  # Mark unused with _
+    _params: Any
+) -> types.ListToolsResult:
+    """List tools - MCP handler signature requires these params."""
+    logger.debug("Listing tools")
+    return types.ListToolsResult(tools=[...])
+
+server = Server("my-server")
+server.on_list_tools = handle_list_tools
+```
 
 ## References
 

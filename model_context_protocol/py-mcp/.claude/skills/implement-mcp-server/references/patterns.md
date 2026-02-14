@@ -10,7 +10,8 @@ This document contains detailed patterns and design approaches for MCP server de
 4. [Resource and Prompt Support](#resource-and-prompt-support)
 5. [Transport Configuration](#transport-configuration)
 6. [Error Handling](#error-handling)
-7. [Testing Patterns](#testing-patterns)
+7. [Linting & Code Quality](#linting--code-quality)
+8. [Testing Patterns](#testing-patterns)
 
 ## Server Architecture Pattern
 
@@ -400,3 +401,84 @@ async def test_pagination_invalid_cursor():
 
 ### Issue: Server won't start with mcp.run()
 **Solution:** Check stdin/stdout are available, verify no syntax errors, ensure all decorators are applied correctly.
+
+## Linting & Code Quality
+
+### Ruff Compliance Pattern
+
+All MCP servers must pass `ruff check` before deployment. Common patterns for compliance:
+
+#### Pattern 1: Handling Unused Function Parameters
+
+**Problem:** MCP handlers receive parameters by protocol requirement, but the handler may not use all of them.
+
+```python
+# ❌ FAILS ruff ARG001
+async def handle_list_tools(ctx: ServerRequestContext, params: Any) -> Result:
+    """This doesn't use ctx or params"""
+    return Result(tools=[])
+
+# ✅ PASSES ruff - Mark with underscore
+async def handle_list_tools(_ctx: ServerRequestContext, _params: Any) -> Result:
+    """Clear that ctx/params are required by protocol but unused"""
+    return Result(tools=[])
+```
+
+**When to apply:** MCP handler callbacks, protocol-required interfaces where you don't use all arguments.
+
+#### Pattern 2: Docstring Formatting
+
+**Problem:** Blank lines in docstrings can accidentally contain whitespace, causing W293 violation.
+
+```python
+# ❌ FAILS ruff W293 (trailing whitespace on blank line)
+def main() -> int:
+    """Start the server.
+    
+    Extended description here.
+    """
+    pass
+
+# ✅ PASSES ruff - Clean blank lines with no whitespace
+def main() -> int:
+    """Start the server.
+
+    Extended description here.
+    """
+    pass
+```
+
+**When to apply:** All multi-line docstrings and docstring examples.
+
+#### Pattern 3: Error Logging Pattern
+
+**Best practice:** Use `exc_info=True` when logging exceptions to capture full stack traces.
+
+```python
+# ✅ CORRECT - Full exception context
+try:
+    result = do_something()
+except Exception as e:
+    logger.error(f"Failed to process: {e}", exc_info=True)
+    return error_response()
+
+# ⚠️ Less useful - No stack trace context
+try:
+    result = do_something()
+except Exception as e:
+    logger.error(f"Failed: {e}")  # No exc_info
+    return error_response()
+```
+
+### Verification Checklist
+
+Before finalizing any server:
+
+- [ ] Run `python -m ruff check src/servers/my_server/` - All checks pass
+- [ ] Run `python -m py_compile src/servers/my_server/*.py` - No syntax errors
+- [ ] Verify unused parameters are prefixed with `_`
+- [ ] Verify no trailing whitespace in docstrings
+- [ ] Verify all try/except blocks log with `exc_info=True`
+- [ ] Verify docstrings present on module and functions
+- [ ] Run `mcp-inspector "python -m src.servers.my_server"` - Server discoverable
+- [ ] Test all tools in mcp-inspector - Functional

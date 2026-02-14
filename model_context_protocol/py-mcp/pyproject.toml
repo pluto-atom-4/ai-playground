@@ -55,6 +55,7 @@ dev = [
 [tool.ruff]
 # removed top-level line-length (use tool.ruff.format)
 target-version = "py310"
+line-length = 100
 exclude = [
     ".git",
     ".venv",
@@ -83,7 +84,6 @@ ignore = [
 ]
 
 [tool.ruff.format]
-line-length = 100
 indent-style = "space"
 
 [tool.pyright]
