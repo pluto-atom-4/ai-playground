@@ -87,6 +87,28 @@ Path conversion: C:\ → /c/
 
 ---
 
+## MCP Server Implementation
+
+When implementing Model Context Protocol (MCP) servers in this project, refer to the comprehensive **MCP Server Implementation Skill** documentation:
+
+📖 **Location:** `.claude/skills/implement-mcp-server/SKILLS.md`
+
+This skill provides:
+- Core server architecture patterns using FastMCP
+- Tool implementation with Pydantic validation
+- Testing strategies and mcp-inspector usage
+- Common issues and troubleshooting solutions
+- Real-world working examples from this project
+
+**Use this skill when:**
+- Creating new MCP servers
+- Implementing tools, resources, or prompts
+- Setting up logging and error handling
+- Testing with mcp-inspector
+- Troubleshooting server issues
+
+---
+
 ## Troubleshooting Guide
 
 ### Common Issues & Solutions
