@@ -13,6 +13,8 @@ It follows the MCP server guidelines with:
 import logging
 import os
 import json
+import sys
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import uvicorn
@@ -20,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
+import click
 
 # Load environment variables
 load_dotenv()
@@ -41,6 +44,49 @@ DESKTOP_PATH = Path.home() / "Desktop"
 
 # Create an MCP server instance
 mcp = FastMCP("DesktopServer", json_response=True)
+
+
+# ==================== Helper Functions ====================
+
+def normalize_filename(filename: str) -> str:
+    """
+    Normalize and validate filename to prevent path traversal attacks.
+
+    - Extracts only the basename (filename without directory path)
+    - Rejects filenames with path separators (/, \, ..)
+    - Returns only the filename component
+
+    Args:
+        filename: The input filename which may contain path separators
+
+    Returns:
+        Normalized basename
+
+    Raises:
+        ValueError: If filename contains path traversal attempts
+    """
+    if not filename:
+        raise ValueError("Filename cannot be empty")
+
+    # Normalize path separators and extract basename
+    # Convert backslashes to forward slashes for consistent handling
+    normalized = filename.replace("\\", "/")
+
+    # Extract basename (last component after any slashes)
+    basename = Path(normalized).name
+
+    # Check if the original filename contained path separators
+    # If it did and basename is different, it means a path was provided
+    if "/" in normalized or "\\" in filename:
+        logger.warning(f"Path traversal attempt detected: {filename}")
+        raise ValueError(f"Filename cannot contain path separators: {filename}")
+
+    # Check for parent directory references
+    if ".." in filename or basename != filename:
+        logger.warning(f"Invalid filename with directory components: {filename}")
+        raise ValueError(f"Filename cannot contain directory paths: {filename}")
+
+    return basename
 
 
 # ==================== MCP Tools ====================
@@ -85,7 +131,9 @@ def get_file_content(filename: str) -> Dict[str, Any]:
     """Read the content of a file on the desktop."""
     logger.info(f"get_file_content called for file: {filename}")
     try:
-        file_path = DESKTOP_PATH / filename
+        # Normalize and validate filename to prevent path traversal
+        normalized_filename = normalize_filename(filename)
+        file_path = DESKTOP_PATH / normalized_filename
 
         # Security: Ensure the file is within desktop directory
         if not file_path.resolve().is_relative_to(DESKTOP_PATH.resolve()):
@@ -98,23 +146,29 @@ def get_file_content(filename: str) -> Dict[str, Any]:
         if not file_path.exists():
             logger.warning(f"File not found: {file_path}")
             return {
-                "content": [{"type": "text", "text": f"Error: File not found: {filename}"}],
+                "content": [{"type": "text", "text": f"Error: File not found: {normalized_filename}"}],
                 "isError": True,
             }
 
         if not file_path.is_file():
             return {
-                "content": [{"type": "text", "text": f"Error: {filename} is not a file"}],
+                "content": [{"type": "text", "text": f"Error: {normalized_filename} is not a file"}],
                 "isError": True,
             }
 
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
 
-        logger.info(f"Successfully read file: {filename}")
+        logger.info(f"Successfully read file: {normalized_filename}")
         return {
             "content": [{"type": "text", "text": content}],
             "isError": False,
+        }
+    except ValueError as e:
+        logger.warning(f"Invalid filename: {e}")
+        return {
+            "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+            "isError": True,
         }
     except Exception as e:
         logger.error(f"Error reading file {filename}: {e}")
@@ -217,7 +271,9 @@ def desktop_file_resource(filename: str) -> str:
     """Resource to access a specific file on the desktop."""
     logger.info(f"desktop_file_resource called for: {filename}")
     try:
-        file_path = DESKTOP_PATH / filename
+        # Normalize and validate filename to prevent path traversal
+        normalized_filename = normalize_filename(filename)
+        file_path = DESKTOP_PATH / normalized_filename
 
         # Security check
         if not file_path.resolve().is_relative_to(DESKTOP_PATH.resolve()):
@@ -225,13 +281,16 @@ def desktop_file_resource(filename: str) -> str:
             return json.dumps({"error": "Access denied - file outside desktop directory"})
 
         if not file_path.exists() or not file_path.is_file():
-            return json.dumps({"error": f"File not found: {filename}"})
+            return json.dumps({"error": f"File not found: {normalized_filename}"})
 
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
 
-        logger.info(f"Successfully read file resource: {filename}")
+        logger.info(f"Successfully read file resource: {normalized_filename}")
         return content
+    except ValueError as e:
+        logger.warning(f"Invalid filename in resource: {e}")
+        return json.dumps({"error": str(e)})
     except Exception as e:
         logger.error(f"Error reading file resource {filename}: {e}")
         return json.dumps({"error": str(e)})
@@ -429,7 +488,9 @@ async def get_file_endpoint(
     """Read the content of a file on the desktop."""
     logger.info(f"POST /api/desktop/file called for: {request.filename}")
     try:
-        file_path = DESKTOP_PATH / request.filename
+        # Normalize and validate filename to prevent path traversal
+        normalized_filename = normalize_filename(request.filename)
+        file_path = DESKTOP_PATH / normalized_filename
 
         # Security check
         if not file_path.resolve().is_relative_to(DESKTOP_PATH.resolve()):
@@ -437,19 +498,22 @@ async def get_file_endpoint(
             raise HTTPException(status_code=403, detail="Access denied - file outside desktop directory")
 
         if not file_path.exists() or not file_path.is_file():
-            raise HTTPException(status_code=404, detail=f"File not found: {request.filename}")
+            raise HTTPException(status_code=404, detail=f"File not found: {normalized_filename}")
 
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
 
         file_size = file_path.stat().st_size
-        logger.info(f"Read file: {request.filename} ({file_size} bytes)")
+        logger.info(f"Read file: {normalized_filename} ({file_size} bytes)")
 
         return FileContentResponse(
-            filename=request.filename,
+            filename=normalized_filename,
             content=content,
             size=file_size
         )
+    except ValueError as e:
+        logger.warning(f"Invalid filename in request: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -490,19 +554,72 @@ async def get_stats_endpoint(api_key: str = Depends(validate_api_key)):
 
 # ==================== Main ====================
 
-if __name__ == "__main__":
-    logger.info(f"Starting Desktop MCP Server on {HOST}:{PORT}")
-    logger.info(f"Desktop path: {DESKTOP_PATH}")
-    logger.info(f"Desktop exists: {DESKTOP_PATH.exists()}")
+@click.command()
+@click.option(
+    "--mode",
+    type=click.Choice(["http", "stdio"], case_sensitive=False),
+    default="stdio",
+    help="Server mode: http (REST API) or stdio (MCP protocol, default)",
+)
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    help="Host for HTTP mode (default: 127.0.0.1)",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=8000,
+    help="Port for HTTP mode (default: 8000)",
+)
+def main(mode: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> int:
+    """Start the Desktop MCP Server in stdio or HTTP mode."""
+    logger.info("=" * 80)
+    logger.info("DESKTOP MCP SERVER STARTUP")
+    logger.info("=" * 80)
+    logger.info(f"Server: DesktopServer")
+    logger.info(f"Desktop Path: {DESKTOP_PATH}")
+    logger.info(f"Mode: {mode.upper()}")
 
-    try:
-        uvicorn.run(
-            app,
-            host=HOST,
-            port=PORT,
-            log_level="info"
-        )
-    except KeyboardInterrupt:
-        logger.info("Desktop MCP Server stopped by user (CTRL+C)")
-        exit(0)
+    if mode.lower() == "stdio":
+        # MCP Protocol Mode - for use with mcp dev inspector
+        logger.info("Starting in MCP STDIO mode for MCP protocol communication")
+        logger.info("This mode is used with: mcp dev src/desktop.py")
+        logger.info("=" * 80)
+
+        try:
+            # Run MCP server over stdio (standard input/output)
+            # This allows mcp dev inspector to communicate with the server
+            asyncio.run(mcp.run_stdio())
+            return 0
+        except KeyboardInterrupt:
+            logger.info("Desktop MCP Server stopped by user (CTRL+C)")
+            return 0
+        except Exception as e:
+            logger.error(f"Server error: {e}", exc_info=True)
+            return 1
+    else:
+        # HTTP Mode - for REST API
+        logger.info(f"Starting in HTTP mode on {host}:{port}")
+        logger.info("This mode is used with: uvicorn src.desktop:app")
+        logger.info("=" * 80)
+
+        try:
+            uvicorn.run(
+                app,
+                host=host,
+                port=port,
+                log_level="info"
+            )
+            return 0
+        except KeyboardInterrupt:
+            logger.info("Desktop MCP Server stopped by user (CTRL+C)")
+            return 0
+        except Exception as e:
+            logger.error(f"Server error: {e}", exc_info=True)
+            return 1
+
+
+if __name__ == "__main__":
+    exit(main())
 

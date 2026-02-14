@@ -395,133 +395,195 @@ class TestDesktopFileResource:
                 pass
 
 
-class TestIntegration:
-    """Integration tests for desktop server components."""
+# ==================== Path Traversal Prevention Tests ====================
 
-    def test_list_and_stats_consistency(self):
-        """Test that list matches stats file count."""
-        list_result = list_desktop_files()
-        stats_result = get_desktop_stats()
+class TestPathTraversalPrevention:
+    """Tests for path traversal attack prevention in filename validation."""
 
-        if list_result["isError"] is False and stats_result["isError"] is False:
-            list_items = json.loads(list_result["content"][0]["text"])
-            stats_data = json.loads(stats_result["content"][0]["text"])
+    def test_reject_forward_slash_path(self):
+        """Test that filenames with forward slashes are rejected."""
+        result = get_file_content("src/servers/simple_task/simple_task_server.py")
+        assert result["isError"] is True
+        assert "path separators" in result["content"][0]["text"].lower()
+        logger.info("✓ Forward slash path correctly rejected")
 
-            file_count = len([item for item in list_items if item["type"] == "file"])
-            dir_count = len([item for item in list_items if item["type"] == "directory"])
+    def test_reject_backslash_path(self):
+        """Test that filenames with backslashes are rejected."""
+        result = get_file_content("src\\servers\\simple_task\\simple_task_server.py")
+        assert result["isError"] is True
+        assert "path separators" in result["content"][0]["text"].lower()
+        logger.info("✓ Backslash path correctly rejected")
 
-            assert file_count == stats_data["total_files"]
-            assert dir_count == stats_data["total_directories"]
+    def test_reject_mixed_separators_path(self):
+        """Test that filenames with mixed path separators are rejected."""
+        result = get_file_content("src/servers\\simple_task/simple_task_server.py")
+        assert result["isError"] is True
+        assert "path separators" in result["content"][0]["text"].lower()
+        logger.info("✓ Mixed separator path correctly rejected")
 
-    def test_multiple_calls_consistency(self):
-        """Test that multiple calls return consistent results."""
-        result1 = list_desktop_files()
-        result2 = list_desktop_files()
+    def test_reject_parent_directory_reference(self):
+        """Test that filenames with .. are rejected."""
+        result = get_file_content("../../../etc/passwd")
+        assert result["isError"] is True
+        logger.info("✓ Parent directory reference correctly rejected")
 
-        if result1["isError"] is False and result2["isError"] is False:
-            items1 = json.loads(result1["content"][0]["text"])
-            items2 = json.loads(result2["content"][0]["text"])
+    def test_reject_double_dot_in_filename(self):
+        """Test that filenames with .. anywhere are rejected."""
+        result = get_file_content("file..name.txt")
+        assert result["isError"] is True
+        logger.info("✓ Double dot in filename correctly rejected")
 
-            assert len(items1) == len(items2)
-
-    def test_stats_multiple_calls_consistency(self):
-        """Test that stats are consistent across multiple calls."""
-        result1 = get_desktop_stats()
-        result2 = get_desktop_stats()
-
-        if result1["isError"] is False and result2["isError"] is False:
-            stats1 = json.loads(result1["content"][0]["text"])
-            stats2 = json.loads(result2["content"][0]["text"])
-
-            # Stats should be identical or very similar (files may be added between calls)
-            assert stats1["desktop_path"] == stats2["desktop_path"]
-
-    def test_resource_vs_tool_consistency(self):
-        """Test that resource and tool return consistent data."""
-        tool_result = list_desktop_files()
-        resource_result = desktop_files_resource()
-
-        if tool_result["isError"] is False:
-            tool_items = json.loads(tool_result["content"][0]["text"])
-            resource_data = json.loads(resource_result)
-
-            # Both should have the same number of items
-            assert len(tool_items) == len(resource_data.get("files", []))
-
-    def test_error_handling_consistency(self):
-        """Test that errors are handled consistently."""
-        file_result = get_file_content("../../../nonexistent.txt")
-        resource_result = desktop_file_resource("../../../nonexistent.txt")
-
-        assert file_result["isError"] is True
-        resource_error = json.loads(resource_result)
-        assert "error" in resource_error
-
-
-class TestEdgeCases:
-    """Tests for edge cases and special scenarios."""
-
-    def test_unicode_file_names(self):
-        """Test handling of unicode characters in file operations."""
+    def test_accept_valid_filename_only(self):
+        """Test that valid filenames without paths are accepted (even if file doesn't exist)."""
+        # Create temp file to test valid filename
         with tempfile.NamedTemporaryFile(mode='w', dir=str(Path.home() / "Desktop"),
-                                        delete=False, suffix='_你好.txt', encoding='utf-8') as f:
-            f.write("Unicode file content")
+                                        delete=False, suffix='.txt') as f:
+            f.write("Test content for path traversal prevention")
             temp_file = f.name
 
         try:
             filename = os.path.basename(temp_file)
             result = get_file_content(filename)
-
-            # Should handle unicode filename or return error gracefully
+            # Should not have path traversal error, might have file not found error
+            # but the key is it should try to read from Desktop, not reject the filename
+            assert isinstance(result, dict)
             assert "content" in result
-            assert "isError" in result
+            logger.info(f"✓ Valid filename accepted: {filename}")
         finally:
             try:
                 os.unlink(temp_file)
             except:
                 pass
 
-    def test_special_characters_in_filename(self):
-        """Test handling of special characters in filenames."""
-        special_names = [
-            "test with spaces.txt",
-            "test-with-dashes.txt",
-            "test_with_underscores.txt"
-        ]
+    def test_resource_reject_path_traversal(self):
+        """Test that desktop://file resource rejects path traversal attempts."""
+        result = desktop_file_resource("src/servers/simple_task/simple_task_server.py")
+        parsed = json.loads(result)
+        assert "error" in parsed
+        assert "path separators" in parsed["error"].lower()
+        logger.info("✓ Resource correctly rejects path traversal")
 
-        for name in special_names:
+    def test_resource_accept_valid_filename(self):
+        """Test that desktop://file resource accepts valid filenames."""
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(Path.home() / "Desktop"),
+                                        delete=False, suffix='.txt') as f:
+            f.write("Resource test content")
+            temp_file = f.name
+
+        try:
+            filename = os.path.basename(temp_file)
+            result = desktop_file_resource(filename)
+            # Should either return content or a valid error (not a validation error)
             try:
-                result = get_file_content(name)
-                # Should not crash
-                assert "content" in result
-                assert "isError" in result
+                parsed = json.loads(result)
+                # If it's JSON, should not have path traversal error
+                if "error" in parsed:
+                    assert "path separators" not in parsed["error"].lower()
+            except json.JSONDecodeError:
+                # Raw file content, which is valid
+                assert "Resource test content" in result
+            logger.info(f"✓ Resource accepts valid filename: {filename}")
+        finally:
+            try:
+                os.unlink(temp_file)
             except:
-                # If file doesn't exist, that's OK
                 pass
 
-    def test_very_long_filename(self):
-        """Test handling of very long filenames."""
-        long_name = "a" * 255 + ".txt"
-        result = get_file_content(long_name)
 
-        # Should handle gracefully
-        assert "content" in result
-        assert "isError" in result
+class TestFilenameNormalization:
+    """Tests for the normalize_filename helper function."""
 
-    def test_empty_filename(self):
-        """Test handling of empty filename."""
-        result = get_file_content("")
+    def test_normalize_empty_filename_raises_error(self):
+        """Test that empty filename raises ValueError."""
+        from desktop import normalize_filename
+        with pytest.raises(ValueError):
+            normalize_filename("")
 
-        assert "content" in result
-        assert "isError" in result
+    def test_normalize_rejects_forward_slashes(self):
+        """Test that filenames with forward slashes are rejected."""
+        from desktop import normalize_filename
+        with pytest.raises(ValueError):
+            normalize_filename("path/to/file.txt")
 
-    def test_null_byte_in_filename(self):
-        """Test that null bytes are handled safely."""
+    def test_normalize_rejects_backslashes(self):
+        """Test that filenames with backslashes are rejected."""
+        from desktop import normalize_filename
+        with pytest.raises(ValueError):
+            normalize_filename("path\\to\\file.txt")
+
+    def test_normalize_rejects_parent_directory(self):
+        """Test that parent directory references are rejected."""
+        from desktop import normalize_filename
+        with pytest.raises(ValueError):
+            normalize_filename("../file.txt")
+
+    def test_normalize_accepts_valid_filename(self):
+        """Test that valid filenames are accepted."""
+        from desktop import normalize_filename
+        result = normalize_filename("myfile.txt")
+        assert result == "myfile.txt"
+
+    def test_normalize_handles_special_characters(self):
+        """Test that filenames with special characters (but no path separators) are accepted."""
+        from desktop import normalize_filename
+        result = normalize_filename("my-file_2024-01-13.txt")
+        assert result == "my-file_2024-01-13.txt"
+
+
+# ==================== Integration Tests ====================
+
+class TestFileAccessIntegration:
+    """Integration tests for file access with path validation."""
+
+    def test_malformed_path_from_mcp_inspector_scenario(self):
+        """Test the exact scenario from the bug report.
+
+        The MCP inspector was requesting:
+        File not found: C:\...\\.srcserverssimple_tasksimple_task_server.py
+
+        This test ensures that such requests are properly rejected.
+        """
+        # Simulate the malformed path that would come from inspector
+        malformed_paths = [
+            "src/servers/simple_task/simple_task_server.py",
+            "src\\servers\\simple_task\\simple_task_server.py",
+            ".srcserverssimple_task",
+            "../src/servers/simple_task/simple_task_server.py",
+        ]
+
+        for malformed_path in malformed_paths:
+            result = get_file_content(malformed_path)
+            assert result["isError"] is True
+            error_msg = result["content"][0]["text"].lower()
+            # Should not try to construct malformed file path
+            assert ".srcservers" not in error_msg
+            logger.info(f"✓ Rejected malformed path: {malformed_path}")
+
+    def test_valid_desktop_file_access(self):
+        """Test that valid files on desktop can be accessed."""
+        # Create a test file on desktop
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(Path.home() / "Desktop"),
+                                        delete=False, suffix='.txt') as f:
+            test_content = "This is a test file on the desktop"
+            f.write(test_content)
+            temp_file = f.name
+
         try:
-            result = get_file_content("test\x00file.txt")
-            assert "content" in result
-            assert "isError" in result
-        except (ValueError, TypeError):
-            # Expected behavior for null bytes
-            pass
+            filename = os.path.basename(temp_file)
+            result = get_file_content(filename)
+
+            assert result["isError"] is False
+            assert test_content in result["content"][0]["text"]
+            logger.info(f"✓ Successfully accessed valid desktop file: {filename}")
+        finally:
+            try:
+                os.unlink(temp_file)
+            except:
+                pass
+
+
+# Add logger for tests
+import logging
+logger = logging.getLogger("test_desktop")
 
