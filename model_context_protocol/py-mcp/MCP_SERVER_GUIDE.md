@@ -1,4 +1,4 @@
-# MCP Server Implementation - Python Model Context Protocol
+npm install -g @modelcontextprotocol/inspector# MCP Server Implementation - Python Model Context Protocol
 
 This guide covers implementing and testing MCP (Model Context Protocol) servers in Python using two modern approaches: **FastMCP** (lightweight, pure MCP) and **FastAPI-MCP** (full RESTful API integration).
 
@@ -421,13 +421,22 @@ class TestAuthentication:
 - ✅ Verify logging output at INFO level
 - ✅ Test edge cases (empty values, invalid types, nonexistent tools)
 
-## Testing with mcp dev Inspector
+## Testing with mcp-inspector
 
-The MCP dev command provides an interactive web-based inspector for testing and debugging MCP servers. This is the recommended approach for both FastMCP and FastAPI-MCP server types.
+Use **mcp-inspector** for reliable, cross-platform testing of MCP servers. This is the **ONLY recommended approach** for both FastMCP and FastAPI-MCP server types.
+
+### ⚠️ Important: Don't Use `mcp dev`
+
+**`mcp dev` has critical limitations:**
+- ❌ Fails on Windows with path parsing errors
+- ❌ Creates malformed file paths
+- ❌ Not reliable for testing
+
+**Use `mcp-inspector` instead** - it's the standard, reliable testing method.
 
 ### Installation
 
-Install the MCP Inspector globally:
+Install mcp-inspector via npm:
 
 ```bash
 npm install -g @modelcontextprotocol/inspector
@@ -441,56 +450,93 @@ npx @modelcontextprotocol/inspector
 
 ### Starting the Inspector for FastMCP
 
-`mcp dev` automatically starts your server and launches the inspector in one command.
+The recommended approach is to use module invocation:
 
-**Launch the inspector (development mode):**
+**Prerequisites - Proper Server Structure:**
 
-```bash
-# Using uv (recommended for MCP projects)
-uv run mcp dev src/server.py
+Your FastMCP server must have:
+
+```
+src/servers/my_server/
+├── __init__.py                # Makes it a Python package
+├── __main__.py                # Entry point for module execution
+└── my_server_server.py        # Main implementation with FastMCP instance
 ```
 
-**With additional dependencies:**
+**`__main__.py` example:**
+```python
+"""Server entry point."""
+import sys
+from src.servers.my_server.my_server_server import main
 
-```bash
-# Add specific packages
-uv run mcp dev src/server.py --with pandas --with numpy
-
-# Mount local code for development
-uv run mcp dev src/server.py --with-editable .
+if __name__ == "__main__":
+    sys.exit(main())
 ```
 
-**Alternative with npx** (if not using uv):
+**`my_server_server.py` example:**
+```python
+from mcp.server.fastmcp import FastMCP
+import click
+
+# FastMCP instance at MODULE LEVEL (critical for discovery)
+server = FastMCP("my-server")
+
+@server.tool()
+def my_tool(param: str) -> str:
+    return f"Result: {param}"
+
+@click.command()
+def main() -> int:
+    try:
+        server.run()
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
+```
+
+**Launch the inspector:**
 
 ```bash
-npx @modelcontextprotocol/inspector src/server.py
+# Navigate to project root
+cd C:\path\to\your\project
+
+# Run with mcp-inspector using module invocation
+mcp-inspector "python -m src.servers.my_server"
+```
+
+**Why this works:**
+- Uses module invocation (`python -m`) instead of file paths
+- No platform-specific path parsing issues
+- Works on Windows, macOS, and Linux
+- Properly discovers FastMCP instances at module level
+
+**Expected output:**
+```
+[INFO] my-server: Starting My Server
+Inspector will connect via stdio protocol and discover all tools
 ```
 
 **Access the web interface:**
-
 - Inspector opens automatically at `http://localhost:5173`
 - Shows a web-based UI for testing your MCP server
-- No need to separately start the server - `mcp dev` does it for you
+- Displays all available tools
+- Allows interactive tool invocation
 
-### Starting the Inspector for FastAPI-MCP
+### Testing FastAPI-MCP Servers
 
-For FastAPI-MCP servers that support stdio-based MCP protocol, `mcp dev` can launch the inspector directly.
+**Option 1: If your server supports stdio-based MCP protocol**
 
-**If your FastAPI-MCP server uses stdio transport:**
-
-```bash
-# Launch inspector with development mode
-uv run mcp dev src/server.py
-```
-
-With dependencies:
+If your FastAPI-MCP server exposes an MCP instance at module level:
 
 ```bash
-# Add packages if needed
-uv run mcp dev src/server.py --with fastapi --with uvicorn
+# From project root
+mcp-inspector "python -m src.servers.my_server"
 ```
 
-**If your FastAPI-MCP server uses HTTP-only transport:**
+**Option 2: If your server uses HTTP-only transport**
 
 If your server only exposes REST API endpoints without MCP stdio support, test the API directly:
 
@@ -511,7 +557,7 @@ curl -X POST http://localhost:8000/api/tools/echo \
 
 **Recommended approach:**
 
-For development and testing, ensure your FastAPI-MCP server supports the MCP protocol over stdio, allowing `mcp dev` to work seamlessly with both server types.
+For development and testing, ensure your FastAPI-MCP server supports the MCP protocol over stdio, allowing mcp-inspector to work seamlessly with both server types.
 
 ### Using the Inspector Web UI
 
@@ -553,20 +599,23 @@ Once the inspector is running at `http://localhost:5173`:
 
 ### Inspector Testing Workflow
 
-Here's a recommended workflow for testing your MCP server:
+Here's the recommended workflow for testing your MCP server with mcp-inspector:
 
 ```
-1. Start MCP Server
-   └─ python src/server.py
+1. Navigate to Project Root
+   └─ cd C:\path\to\your\project
 
-2. Start Inspector
-   └─ mcp dev src/server.py
+2. Start Inspector (starts server automatically)
+   └─ mcp-inspector "python -m src.servers.my_server"
 
-3. List All Tools
-   └─ Verify all tools appear in sidebar
+3. Wait for Web UI to Open
+   └─ Inspector opens automatically at http://localhost:5173
 
-4. For Each Tool:
-   ├─ Inspect Schema
+4. List All Tools
+   └─ Left sidebar shows all available tools
+
+5. For Each Tool:
+   ├─ Click tool name to view schema
    │  └─ Verify parameters match implementation
    ├─ Invoke with Valid Inputs
    │  └─ Verify correct output format
@@ -577,15 +626,22 @@ Here's a recommended workflow for testing your MCP server:
    └─ Check Response Time
       └─ Ensure execution is fast
 
-5. Verify Logging
-   └─ Check server logs for INFO messages
+6. Monitor Server Logs
+   └─ Check terminal for INFO/ERROR messages
 
-6. Test Error Handling
+7. Test Error Handling
    ├─ Missing required parameters
    ├─ Invalid parameter types
    ├─ Tool not found
    └─ Server errors
 ```
+
+**Critical Requirements:**
+- ✅ FastMCP instance at MODULE LEVEL (not inside main())
+- ✅ Proper `__main__.py` entry point
+- ✅ All `__init__.py` files present in package directories
+- ✅ Run mcp-inspector from PROJECT ROOT
+- ✅ Use module invocation: `python -m package.module`
 
 ### Example: Testing Echo Tool
 
@@ -616,14 +672,19 @@ Here's a recommended workflow for testing your MCP server:
 
 ### Troubleshooting Inspector
 
-| Issue | Solution |
-|-------|----------|
-| **Inspector won't start** | Ensure Node.js/npm is installed: `node --version` |
-| **Can't connect to server** | Verify server is running on expected stdio/port |
-| **Tools not appearing** | Check server logs for initialization errors |
-| **Tool invocation fails** | Verify input schema and parameter types in inspector |
-| **Unicode not displaying** | Inspector handles UTF-8, check terminal encoding |
-| **Timeout errors** | Tool may be hanging - check for infinite loops |
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| **File not found error** | Using `mcp dev` or file path | Use mcp-inspector with module: `mcp-inspector "python -m src.servers.my_server"` |
+| **Inspector won't start** | Node.js/npm not installed | Install Node.js: `node --version` should work |
+| **ModuleNotFoundError** | Not running from project root | Change to project root: `cd C:\path\to\project` |
+| **No tools found** | FastMCP instance not at module level | Move instance outside main(): `server = FastMCP("name")` (at module level) |
+| **No tools found** | Missing `__main__.py` | Create `__main__.py` with proper imports |
+| **Tools not appearing** | `__init__.py` files missing | Add `__init__.py` to all package directories |
+| **Can't connect to server** | Wrong invocation method | Use: `mcp-inspector "python -m src.servers.my_server"` |
+| **Tool invocation fails** | Input schema mismatch | Check function parameters match inspector form |
+| **Unicode not displaying** | Terminal encoding issue | Ensure UTF-8 encoding (Windows: `chcp 65001`) |
+| **Timeout errors** | Tool hanging | Check for infinite loops or blocking I/O |
+| **Port 6277 in use** | Inspector already running | Kill process: `lsof -i :6277 \| grep -v COMMAND \| awk '{print $2}' \| xargs kill` |
 
 ## Development Workflow
 
@@ -652,17 +713,32 @@ Choose FastMCP or FastAPI-MCP based on your requirements, then:
 # Include error handling
 ```
 
-### 3. Test with Inspector
+### 3. Test with mcp-inspector
 
+**Ensure your server structure is correct:**
+```
+src/servers/my_server/
+├── __init__.py
+├── __main__.py
+└── my_server_server.py
+```
+
+**Start testing:**
 ```bash
-# Terminal 1: Start your server
-python src/my_server.py
+# Navigate to project root
+cd C:\path\to\your\project
 
-# Terminal 2: Start inspector
-mcp dev src/my_server.py
+# Start inspector (it will start your server automatically)
+mcp-inspector "python -m src.servers.my_server"
 
 # Visit http://localhost:5173 and test interactively
 ```
+
+**Key points:**
+- Use module invocation: `python -m src.servers.my_server`
+- Run from project root directory
+- FastMCP instance must be at module level in my_server_server.py
+- Never use `mcp dev` - it has Windows path issues
 
 ### 4. Verify with Automated Tests
 
@@ -699,6 +775,125 @@ pyright
 # Example: Deploy FastAPI
 gunicorn src.server:app -w 4 -b 0.0.0.0:8000
 ```
+
+## Critical Server Structure Requirements
+
+To enable proper discovery and testing with mcp-inspector, your server MUST follow this structure:
+
+### Required Structure
+```
+src/servers/my_server/
+├── __init__.py                    # Must exist (can be empty)
+├── __main__.py                    # REQUIRED for python -m to work
+└── my_server_server.py           # Main server implementation
+```
+
+### `__init__.py`
+```python
+# Can be empty or contain package initialization
+```
+
+### `__main__.py` (REQUIRED)
+```python
+"""Server entry point.
+
+This module allows the server to be run as:
+  python -m src.servers.my_server
+
+Also enables mcp-inspector discovery via:
+  mcp-inspector "python -m src.servers.my_server"
+"""
+
+import sys
+from src.servers.my_server.my_server_server import main
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+### `my_server_server.py` (Key Requirements)
+```python
+from mcp.server.fastmcp import FastMCP
+import click
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("my-server")
+
+# ✅ CRITICAL: FastMCP instance at MODULE LEVEL
+# NOT inside main() - must be discoverable by mcp-inspector
+server = FastMCP("my-server")
+
+@server.tool(name="my_tool", description="Tool description")
+async def my_tool(param: str) -> str:
+    """Tool implementation"""
+    return f"Result: {param}"
+
+@click.command()
+def main() -> int:
+    """Start the server"""
+    try:
+        server.run()  # Runs on stdio
+        return 0
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+        return 0
+    except Exception as e:
+        logger.error(f"Server error: {e}", exc_info=True)
+        return 1
+
+if __name__ == "__main__":
+    exit(main())
+```
+
+### What Goes Wrong (Common Mistakes)
+
+❌ **FastMCP instance inside main()**
+```python
+def main():
+    server = FastMCP("my-server")  # NOT DISCOVERABLE!
+```
+
+❌ **Missing __main__.py**
+```
+src/servers/my_server/
+├── __init__.py
+└── my_server_server.py
+# Missing __main__.py - python -m won't work
+```
+
+❌ **Using mcp dev instead of mcp-inspector**
+```bash
+mcp dev src/servers/my_server/my_server_server.py  # FAILS on Windows!
+```
+
+❌ **Using file path instead of module invocation**
+```bash
+mcp-inspector src/servers/my_server/my_server_server.py  # FAILS!
+mcp-inspector "python -m src.servers.my_server"  # CORRECT!
+```
+
+## Working Example: simple_task_server
+
+This project includes a complete working example at `src/servers/simple_task/`:
+
+**Verified to work:**
+- ✅ FastMCP instance at module level
+- ✅ Proper `__main__.py` entry point
+- ✅ Tools properly decorated with `@server.tool()`
+- ✅ Async task execution
+- ✅ Proper logging
+
+**Test it:**
+```bash
+cd C:\Users\nobu\Documents\JetBrains\ai-playground\model_context_protocol\py-mcp
+mcp-inspector "python -m src.servers.simple_task"
+```
+
+**Expected:**
+- Server starts and logs: `[INFO] simple-task-server: Starting Simple Task Server`
+- Inspector discovers tool: `long_running_task`
+- Tool can be invoked and completes in ~3 seconds with: `Task completed!`
 
 ## References
 
