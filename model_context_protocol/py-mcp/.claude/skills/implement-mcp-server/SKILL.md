@@ -132,7 +132,7 @@ mcp-inspector "python -m src.servers.my_server --log-level DEBUG"
 ### Don'ts
 - ❌ **Don't create `FastMCP` instance inside `main()`** (won't be discoverable)
 - ❌ **Don't use `mcp dev` for testing** (has Windows path parsing bugs)
-- ❌ Don't use the low-level `Server` class (use FastMCP only)
+- ❌ Don't use the low-level `Server` class for simple tools (use FastMCP instead)
 - ❌ Don't use `if __name__ == "__main__": main()` in server module (use `__main__.py`)
 - ❌ Don't add `--port` option to server (unless running HTTP separately)
 - ❌ Don't raise exceptions for invalid cursors (handle gracefully)
@@ -144,6 +144,8 @@ mcp-inspector "python -m src.servers.my_server --log-level DEBUG"
 - ❌ **Don't leave unused function parameters uncommented** (fails ARG001 check)
 - ❌ **Don't add whitespace to blank lines in docstrings** (fails W293 check)
 - ❌ **Don't use print() for logging** (use `logger` instead)
+- ❌ **Don't pass handler functions in `Server.__init__()`** - use property assignment instead
+- ❌ **Don't import `ServerRequestContext`** - use `Any` type hint instead
 
 ## Code Quality & Linting Compliance
 
@@ -299,16 +301,18 @@ The `src/servers/simple_task/` in the reference project demonstrates correct Fas
 
 ### Example 2: Low-Level Server API (Experimental Features)
 
-For servers that require experimental features (like task elicitation/sampling), the low-level `Server` API must be used:
+For servers that require experimental features (like task elicitation/sampling), the low-level `Server` API can be used:
 
-**Reference:** `src/servers/simple_task_interactive/`
+**Reference:** `src/servers/simple_task_interactive/` (Updated to work with current MCP)
 
 **When to use low-level API:**
 - Experimental task support (`server.experimental.enable_tasks()`)
-- HTTP streaming requirements
+- HTTP streaming requirements  
 - Custom request/response handling
 
-**Best practices for low-level servers:**
+**Key points for low-level servers:**
+- ✅ Use `Any` type hint for context parameters (not `ServerRequestContext`)
+- ✅ Register handlers using property assignment: `server.on_list_tools = handler` (not constructor parameters)
 - ✅ Still use structured logging with `logger`
 - ✅ Prefix unused handler parameters with `_`
 - ✅ Include proper docstrings and type hints
@@ -317,20 +321,25 @@ For servers that require experimental features (like task elicitation/sampling),
 - ✅ Pass all ruff linting checks
 - ✅ Create proper `__main__.py` entry point
 
-**Example pattern:**
+**Example pattern (Updated for current MCP):**
 ```python
-from mcp.server import Server, ServerRequestContext
+from mcp.server import Server
+from typing import Any
 
-async def handle_list_tools(
-    _ctx: ServerRequestContext,  # Mark unused with _
-    _params: Any
-) -> types.ListToolsResult:
-    """List tools - MCP handler signature requires these params."""
+async def handle_list_tools(_ctx: Any, _params: Any) -> types.ListToolsResult:
+    """List tools - Handler signature receives context and params."""
     logger.debug("Listing tools")
     return types.ListToolsResult(tools=[...])
 
+# Create server without handler parameters
 server = Server("my-server")
+
+# Register handlers using property assignment
 server.on_list_tools = handle_list_tools
+server.on_call_tool = handle_call_tool
+
+# Enable experimental features
+server.experimental.enable_tasks()
 ```
 
 ## References
