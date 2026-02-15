@@ -13,6 +13,7 @@ Can be run as:
    python -m src.servers.simple_task_interactive
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -24,7 +25,7 @@ import click
 import uvicorn
 from dotenv import load_dotenv
 from mcp import types
-from mcp.server import Server, ServerRequestContext
+from mcp.server import Server, InitializationOptions
 from mcp.server.experimental.task_context import ServerTaskContext
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
@@ -42,9 +43,7 @@ logging.basicConfig(
 logger = logging.getLogger("simple-task-interactive-server")
 
 
-async def handle_list_tools(
-    _ctx: ServerRequestContext, _params: types.PaginatedRequestParams | None
-) -> types.ListToolsResult:
+async def handle_list_tools(_ctx: Any, _params: types.PaginatedRequestParams | None) -> types.ListToolsResult:
     """List available tools."""
     logger.debug("Listing tools")
     return types.ListToolsResult(
@@ -68,7 +67,7 @@ async def handle_list_tools(
     )
 
 
-async def handle_confirm_delete(ctx: ServerRequestContext, arguments: dict[str, Any]) -> types.CreateTaskResult:
+async def handle_confirm_delete(ctx: Any, arguments: dict[str, Any]) -> types.CreateTaskResult:
     """Handle the confirm_delete tool - demonstrates elicitation."""
     logger.debug(f"confirm_delete handler called with arguments: {arguments}")
     ctx.experimental.validate_task_mode(types.TASK_REQUIRED)
@@ -110,7 +109,7 @@ async def handle_confirm_delete(ctx: ServerRequestContext, arguments: dict[str, 
     return await ctx.experimental.run_task(work)
 
 
-async def handle_write_haiku(ctx: ServerRequestContext, arguments: dict[str, Any]) -> types.CreateTaskResult:
+async def handle_write_haiku(ctx: Any, arguments: dict[str, Any]) -> types.CreateTaskResult:
     """Handle the write_haiku tool - demonstrates sampling."""
     logger.debug(f"write_haiku handler called with arguments: {arguments}")
     ctx.experimental.validate_task_mode(types.TASK_REQUIRED)
@@ -149,9 +148,7 @@ async def handle_write_haiku(ctx: ServerRequestContext, arguments: dict[str, Any
     return await ctx.experimental.run_task(work)
 
 
-async def handle_call_tool(
-    ctx: ServerRequestContext, params: types.CallToolRequestParams
-) -> types.CallToolResult | types.CreateTaskResult:
+async def handle_call_tool(ctx: Any, params: types.CallToolRequestParams) -> types.CallToolResult | types.CreateTaskResult:
     """Dispatch tool calls to their handlers."""
     logger.debug(f"Tool call: {params.name}")
     arguments = params.arguments or {}
@@ -175,11 +172,11 @@ async def handle_call_tool(
         )
 
 
-server = Server(
-    "simple-task-interactive-server",
-    on_list_tools=handle_list_tools,
-    on_call_tool=handle_call_tool,
-)
+server = Server("simple-task-interactive-server")
+
+# Register handlers using properties instead of constructor parameters
+server.on_list_tools = handle_list_tools
+server.on_call_tool = handle_call_tool
 
 # Enable task support - this auto-registers all handlers
 server.experimental.enable_tasks()
@@ -225,15 +222,16 @@ def main(port: int, log_level: str) -> int:
     try:
         # Auto-detect HTTP vs stdio mode
         # If stdout is a TTY (terminal), run HTTP server
-        # Otherwise (piped/stdio), run MCP server
+        # Otherwise (piped/stdio), run MCP server over HTTP with StreamableHTTPSessionManager
         if sys.stdout.isatty():
             logger.info(f"Running in HTTP mode on http://127.0.0.1:{port}/mcp")
-            session_manager = StreamableHTTPSessionManager(app=server)
-            starlette_app = create_app(session_manager)
-            uvicorn.run(starlette_app, host="127.0.0.1", port=port)
         else:
             logger.info("Running in stdio mode for MCP protocol")
-            server.run()
+            port = 8000
+        
+        session_manager = StreamableHTTPSessionManager(app=server)
+        starlette_app = create_app(session_manager)
+        uvicorn.run(starlette_app, host="127.0.0.1", port=port)
 
         return 0
     except KeyboardInterrupt:
