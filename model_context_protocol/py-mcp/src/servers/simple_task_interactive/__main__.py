@@ -9,7 +9,7 @@ Also enables mcp-inspector discovery via:
 
 import sys
 
-from src.servers.simple_task_interactive.simple_task_interactive import main
+from .simple_task_interactive import main
 
 if __name__ == "__main__":
     sys.exit(main())
